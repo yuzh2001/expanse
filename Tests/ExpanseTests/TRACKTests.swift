@@ -86,7 +86,8 @@ private final class QuitApp: NSRunningApplication {
         var input = CanvasController.ScanInput()
         input.live = true
         input.kinds = kinds
-        input.corner = CGPoint(x: 1472, y: 902)
+        // The laptop display with no other displays: both corners recognised (see parkingArea).
+        input.parking = CanvasController.ParkingArea(right: CGPoint(x: 1472, y: 902), leftX: 0, bottom: 982)
         return input
     }
 
@@ -104,11 +105,11 @@ private final class QuitApp: NSRunningApplication {
         let far = Self.placed(102, canvas: CGRect(x: 5000, y: 5000, width: 400, height: 300))
         let c = Self.canvas([on, far])
         defer { Self.finish(c) }
-        #expect(c.parkPoint == CGPoint(x: 1511, y: 981))
+        #expect(c.parkPoint(for: far.canvasFrame.size) == CGPoint(x: 1511, y: 981))
         let plan = c.commitPlan()
         let onPlan = plan.first { $0.0 === on }, farPlan = plan.first { $0.0 === far }
         #expect(onPlan?.1 == CGPoint(x: 100, y: 133) && onPlan?.2 == false)
-        #expect(farPlan?.1 == c.parkPoint && farPlan?.2 == true)
+        #expect(farPlan?.1 == c.parkPoint(for: far.canvasFrame.size) && farPlan?.2 == true)
         c.commit()
         #expect(far.parked && !on.parked)
         // On the canvas it's at its own spot, not in the corner.
@@ -165,7 +166,7 @@ private final class QuitApp: NSRunningApplication {
         #expect(c.commitPlan().first?.2 == false)
         c.camera.origin.y += 150
         #expect(c.commitPlan().first?.2 == true)
-        #expect(c.commitPlan().first?.1 == c.parkPoint)
+        #expect(c.commitPlan().first?.1 == c.parkPoint(for: w.canvasFrame.size))
     }
 
     // MARK: TRACK-04 (manual)
@@ -474,10 +475,11 @@ private final class QuitApp: NSRunningApplication {
         let c = Self.canvas([w])
         defer { Self.finish(c) }
         #expect(c.parkingCorner == CGPoint(x: 1472, y: 902))
-        #expect(c.inParkingCorner(c.parkPoint))
-        #expect(c.inParkingCorner(CGPoint(x: 1480, y: 940)))
-        #expect(!c.inParkingCorner(CGPoint(x: 1400, y: 940)))
-        #expect(!c.inParkingCorner(CGPoint(x: 1480, y: 850)))
+        let parkedFrame = CGRect(origin: c.parkPoint(for: w.canvasFrame.size), size: w.canvasFrame.size)
+        #expect(c.inParkingCorner(parkedFrame))
+        #expect(c.inParkingCorner(CGRect(x: 1480, y: 940, width: 600, height: 400)))
+        #expect(!c.inParkingCorner(CGRect(x: 1400, y: 940, width: 600, height: 400)))
+        #expect(!c.inParkingCorner(CGRect(x: 1480, y: 850, width: 600, height: 400)))
         // After wake: Expanse placed it on screen, but a scan finds it in the corner.
         let found = Fake.scWindow(id: 2001, frame: CGRect(x: 1480, y: 940, width: 600, height: 400))
         Self.scan(c, [found])
@@ -516,7 +518,7 @@ private final class QuitApp: NSRunningApplication {
         // Parked, and macOS nudged it within the corner: anywhere in the corner will do.
         w.parked = true
         w.lastPlaced = CGPoint(x: 1480, y: 940)
-        #expect(c.alreadyAt(w, c.parkPoint, parked: true))
+        #expect(c.alreadyAt(w, c.parkPoint(for: w.canvasFrame.size), parked: true))
         // Coming on screen, it moves.
         #expect(!c.alreadyAt(w, CGPoint(x: 300, y: 233), parked: false))
         // On screen: only where it was last put (within half a point).
@@ -526,7 +528,7 @@ private final class QuitApp: NSRunningApplication {
         #expect(c.alreadyAt(w, CGPoint(x: 300.4, y: 233), parked: false))
         #expect(!c.alreadyAt(w, CGPoint(x: 301, y: 233), parked: false))
         // Going off screen, it moves.
-        #expect(!c.alreadyAt(w, c.parkPoint, parked: true))
+        #expect(!c.alreadyAt(w, c.parkPoint(for: w.canvasFrame.size), parked: true))
         w.lastPlaced = nil
         #expect(!c.alreadyAt(w, CGPoint(x: 300, y: 233), parked: false))
     }
@@ -774,13 +776,13 @@ private final class QuitApp: NSRunningApplication {
         defer { Self.finish(bottom) }
         #expect(bottom.parkingCorner == CGPoint(x: 1472, y: 832))
         // macOS keeps a strip of a parked window above the Dock.
-        #expect(bottom.inParkingCorner(CGPoint(x: 1480, y: 850)))
-        #expect(!bottom.inParkingCorner(CGPoint(x: 1480, y: 800)))
+        #expect(bottom.inParkingCorner(CGRect(x: 1480, y: 850, width: 600, height: 400)))
+        #expect(!bottom.inParkingCorner(CGRect(x: 1480, y: 800, width: 600, height: 400)))
         let right = Self.canvas(display: TestDisplay(dockRight: 80))
         defer { Self.finish(right) }
         #expect(right.parkingCorner == CGPoint(x: 1392, y: 902))
-        #expect(right.inParkingCorner(CGPoint(x: 1400, y: 950)))
-        #expect(!right.inParkingCorner(CGPoint(x: 1380, y: 950)))
+        #expect(right.inParkingCorner(CGRect(x: 1400, y: 950, width: 600, height: 400)))
+        #expect(!right.inParkingCorner(CGRect(x: 1380, y: 950, width: 600, height: 400)))
     }
 
     @Test("TRACK-34 A parked window nudged above the Dock keeps its canvas spot")
@@ -1050,7 +1052,7 @@ private final class QuitApp: NSRunningApplication {
         #expect(w.lastPlaced == Self.setDown)
         #expect(w.followedFrom == nil)
         // Nothing to do at the next commit: parking it again every time held up every hop.
-        #expect(c.alreadyAt(w, c.parkPoint, parked: true))
+        #expect(c.alreadyAt(w, c.parkPoint(for: w.canvasFrame.size), parked: true))
     }
 
     @Test("TRACK-45 A window too tall for the screen keeps its spot where macOS sets it down when parked: its move")

@@ -110,6 +110,8 @@ enum TestCanvas {
         // Whatever this Mac's full-screen apps are showing stays out of the tests.
         c.takeSpacePictures = { _, _, _ in }
         c.displayOverride = (display.frame, display.usable)
+        // And exactly one display: the machine's real arrangement stays out of the tests.
+        c.otherDisplaysOverride = []
         c.updateOverlayFrame()
         c.windows = windows
         return c
