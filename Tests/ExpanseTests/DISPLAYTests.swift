@@ -882,6 +882,17 @@ struct DISPLAYTests {
         tall.parked = true
         #expect(c.stillParked(tall, at: CGPoint(x: -799, y: 33)))
 
+        // The real window wider than the canvas one (an app's minimum width, a VM window
+        // sizing itself): the park point leaves its real right edge at the 1px column, and
+        // being there still reads as parked, not as moved.
+        let wide = Fake.window(id: 3003, canvas: CGRect(x: 7000, y: 300, width: 800, height: 600),
+                               real: CGRect(x: 0, y: 0, width: 1000, height: 600))
+        c.windows.append(wide)
+        let widePlan = c.commitPlan().first { $0.0 === wide }
+        #expect(widePlan?.1 == CGPoint(x: -999, y: 981) && widePlan?.2 == true)
+        wide.parked = true
+        #expect(c.stillParked(wide, at: CGPoint(x: -999, y: 981)))
+
         // Only a display to the left: the right corner stays.
         c.otherDisplaysOverride = [CGRect(x: -1920, y: 0, width: 1920, height: 1080)]
         #expect(c.parkSide == .right)

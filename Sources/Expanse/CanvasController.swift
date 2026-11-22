@@ -399,9 +399,9 @@ final class CanvasController: NSObject {
     /// parked: dragged nearly off that edge, a window you're moving is still followed.
     private func stillParked(_ w: ManagedWindow, at p: CGPoint) -> Bool {
         let area = parkingArea
-        let f = CGRect(origin: p, size: w.canvasFrame.size)
+        let f = CGRect(origin: p, size: w.realSize)
         if area.contains(f) { return true }
-        guard w.parked, w.canvasFrame.height > viewport.height else { return false }
+        guard w.parked, f.height > viewport.height else { return false }
         if let right = area.right, p.x >= right.x { return true }
         if let leftX = area.leftX, f.maxX <= leftX + 40 { return true }
         return false
@@ -4534,7 +4534,7 @@ final class CanvasController: NSObject {
             if goesOnScreen(r, in: vp) {
                 return (w, CGPoint(x: r.minX.rounded(), y: r.minY.rounded()), false)
             }
-            return (w, parkPoint(for: w.canvasFrame.size), true)
+            return (w, parkPoint(for: w.realSize), true)
         }
     }
 
