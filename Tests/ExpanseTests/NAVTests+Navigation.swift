@@ -559,4 +559,16 @@ extension NAVTests {
         Self.withMotion("glide", reduce: true) { #expect(!CanvasController.lowMotion) }
         Self.withMotion("jump", reduce: false) { #expect(CanvasController.lowMotion) }
     }
+
+    @Test("NAV-66 ⌃⌥ + scroll moves the canvas from anywhere, over windows too")
+    func nav66() {
+        #expect(CanvasController.scrollTakesOverAnywhere([.control, .option]))
+        #expect(CanvasController.scrollTakesOverAnywhere([.control, .option, .shift]))
+        // Either alone, or nothing: only over the bare desktop, as before (NAV-18).
+        #expect(!CanvasController.scrollTakesOverAnywhere([.control]))
+        #expect(!CanvasController.scrollTakesOverAnywhere([.option]))
+        #expect(!CanvasController.scrollTakesOverAnywhere([]))
+        // ⌘ as well: not this.
+        #expect(!CanvasController.scrollTakesOverAnywhere([.command, .control, .option]))
+    }
 }

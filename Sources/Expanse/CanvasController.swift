@@ -1709,15 +1709,23 @@ final class CanvasController: NSObject {
         }
     }
 
+    /// ⌃⌥ + scroll pans the canvas from anywhere, over windows too (NAV-66); not with ⌘ as well.
+    static func scrollTakesOverAnywhere(_ flags: NSEvent.ModifierFlags) -> Bool {
+        flags.contains([.control, .option]) && !flags.contains(.command)
+    }
+
     /// At 100% the desktop shows through the backdrop and gets its events (see OverlayWindow), but
     /// scrolling or pinching on it still opens the canvas at 100%, as on the backdrop: the rest of
-    /// the gesture then comes to the canvas, on top. Only where no window is under the pointer.
+    /// the gesture then comes to the canvas, on top. Only where no window is under the pointer,
+    /// unless it's a scroll with ⌃⌥ held (see scrollTakesOverAnywhere).
     private func handleDesktopGesture(_ event: NSEvent) {
         guard !isActive, !isPaused, !gliding else { return }
         // ⌥ + pinch zooms out from anywhere (see handleGlobalPinch).
         if event.type == .magnify, event.modifierFlags.contains(.option) { return }
         // The start of a gesture (a mouse wheel's ticks have no phases: each counts).
         guard event.phase == .began || event.phase == .mayBegin || (event.phase == [] && event.momentumPhase == []) else { return }
+        // Over a window or not: the canvas, on top, gets the rest of the gesture, ⌃⌥ held or not.
+        if event.type == .scrollWheel, Self.scrollTakesOverAnywhere(event.modifierFlags) { enter(zoomOut: false); return }
         // Where AppKit has it (bottom-left origin) to the window server's (top-left).
         let p = NSEvent.mouseLocation
         let point = CGPoint(x: p.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - p.y)

@@ -4,7 +4,9 @@ What we might build next. New requests go in as they come up, and finished work 
 
 ## Not released yet
 
-Nothing yet.
+- ⌃⌥ + scroll moves the canvas from anywhere, over a window too (NAV-66): the rest of the
+  gesture pans the view, ⌃⌥ held or not, and a flick ends snapped as usual. Before, a scroll only
+  opened the canvas over the bare desktop.
 
 ## Bugs
 

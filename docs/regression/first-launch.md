@@ -171,7 +171,7 @@
 - **Steps:**
   1. Go to the last page.
   2. Click Start using Expanse.
-- **Expected:** "All set" / "Try it now." with keycaps and descriptions: ⌥ ` zoom out to every window and back; Click to dive into a window; ⌃ ← → ↑ ↓ to hop; ⌃ ⌥ C to centre the window you're in (added by 8c2b732); Pinch / Scroll to zoom and pan; Space + Drag to move around; Drag to move windows; ⇧ Click to select several, then drag or close them together; T to tidy up. Underneath: "Find this again under the menu bar icon › Welcome & Shortcuts." At step 2 the walkthrough closes and Expanse is running.
+- **Expected:** "All set" / "Try it now." with keycaps and descriptions: ⌥ ` zoom out to every window and back; Click to dive into a window; ⌃ ← → ↑ ↓ to hop; ⌃ ⌥ C to centre the window you're in (added by 8c2b732); Pinch / Scroll to zoom and pan; ⌃ ⌥ Scroll to pan from anywhere, over windows too (NAV-66); Space + Drag to move around; Drag to move windows; ⇧ Click to select several, then drag or close them together; T to tidy up. Underneath: "Find this again under the menu bar icon › Welcome & Shortcuts." At step 2 the walkthrough closes and Expanse is running.
 - **Automate:** manual: SwiftUI page content.
 
 ## SETUP-16 Expanse does nothing until the walkthrough is finished, skipped or closed
