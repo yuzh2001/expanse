@@ -7,14 +7,14 @@ import ScreenCaptureKit
 @_private(sourceFile: "LayoutStore.swift") @testable import Expanse
 
 /// docs/regression/rows.md. The Rows layout engine, pure functions over canvas frames — no
-/// controller, no screen. The metrics below: 400pt rows 100pt apart with a 20pt gap, the grid
+/// controller, no screen. The metrics below: 400pt rows 100pt apart with a 20pt gap, the inbox
 /// a 60pt gap to the rows' right wrapping past 500pt.
 @MainActor @Suite("ROWS: Rows layout", .serialized) struct ROWSTests {
 
     // MARK: Helpers
 
     private static let m = RowLayout.Metrics(windowHeight: 400, gap: 20, rowGap: 100,
-                                             gridGap: 60, gridMaxWidth: 500)
+                                             inboxGap: 60, inboxMaxWidth: 500)
 
     private static func r(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> CGRect {
         CGRect(x: x, y: y, width: w, height: h)
@@ -58,10 +58,10 @@ import ScreenCaptureKit
 
     // MARK: ROWS-02
 
-    @Test("ROWS-02 The grid sits right of the rows and packs on shelves that wrap (logic)")
+    @Test("ROWS-02 The inbox sits right of the rows and packs on shelves that wrap (logic)")
     func rows02() {
         let laid = RowLayout.layout([
-            Self.i(1, 0, 0, 400, 300, row: 0),          // rows end at x 400; grid starts at 460
+            Self.i(1, 0, 0, 400, 300, row: 0),          // rows end at x 400; inbox starts at 460
             Self.i(2, 0, 0, 200, 200, row: nil),
             Self.i(3, 0, 0, 200, 200, row: nil),
             Self.i(4, 0, 0, 600, 100, row: nil),        // wider than a shelf alone
@@ -123,7 +123,7 @@ import ScreenCaptureKit
 
     // MARK: ROWS-05
 
-    @Test("ROWS-05 Dropping past the rows opens a new row; into the grid region puts it back (logic)")
+    @Test("ROWS-05 Dropping past the rows opens a new row; into the inbox region puts it back (logic)")
     func rows05() {
         let rows = [Self.i(1, 0, 0, 300, 400, row: 0), Self.i(2, 0, 420, 300, 400, row: 1)]
         // Above the first row: a new row 0, the others move down.
@@ -138,8 +138,8 @@ import ScreenCaptureKit
                               into: rows + [Self.i(4, 2000, 0, 200, 400, row: nil)], Self.m)
         #expect(laid.first { $0.id == 4 }!.row == 2)
         #expect(Self.frame(laid, 4) == Self.r(50, 1000, 200, 400))
-        // Right of the rows' end (they end at 300, the grid starts at 360): back to the grid,
-        // packed at the grid's start at its own size whatever the drop's spot was.
+        // Right of the rows' end (they end at 300, the inbox starts at 360): back to the inbox,
+        // packed at the inbox's start at its own size whatever the drop's spot was.
         laid = RowLayout.drop(5, at: Self.r(600, 100, 250, 150),
                               into: rows + [Self.i(5, 50, 420, 250, 400, row: 1)], Self.m)
         #expect(laid.first { $0.id == 5 }!.row == nil)
@@ -148,7 +148,7 @@ import ScreenCaptureKit
 
     // MARK: ROWS-06
 
-    @Test("ROWS-06 Switching to Rows: windows already in bands go into rows, strays to the grid (logic)")
+    @Test("ROWS-06 Switching to Rows: windows already in bands go into rows, strays to the inbox (logic)")
     func rows06() {
         let laid = RowLayout.distribute([
             (id: 1, frame: Self.r(0, 100, 600, 400), fixedHeight: false),
@@ -158,14 +158,14 @@ import ScreenCaptureKit
             (id: 5, frame: Self.r(700, 620, 600, 400), fixedHeight: false),
             (id: 6, frame: Self.r(400, 1200, 600, 400), fixedHeight: false),
         ], Self.m)
-        // The two bands (y ~100 and y ~600) are rows 0 and 1; the lone window at y 1200 is grid.
+        // The two bands (y ~100 and y ~600) are rows 0 and 1; the lone window at y 1200 is inbox.
         #expect(laid.first { $0.id == 1 }!.row == 0 && laid.first { $0.id == 3 }!.row == 0)
         #expect(laid.first { $0.id == 4 }!.row == 1 && laid.first { $0.id == 5 }!.row == 1)
         #expect(laid.first { $0.id == 6 }!.row == nil)
         // x is kept where there's no overlap; tops are the rows'.
         #expect(Self.frame(laid, 3) == Self.r(1400, 0, 600, 400))
         #expect(Self.frame(laid, 5) == Self.r(700, 500, 600, 400))
-        // The grid goes right of the widest row (2000) + the grid gap.
+        // The inbox goes right of the widest row (2000) + the inbox gap.
         #expect(Self.frame(laid, 6) == Self.r(2060, 0, 600, 400))
     }
 
@@ -257,14 +257,14 @@ import ScreenCaptureKit
         }
         #expect(c.windows[0].canvasFrame.origin == .zero && c.windows[1].canvasFrame.origin == CGPoint(x: 700, y: 0))
         #expect(Self.window(c, 4)!.row == 1 && Self.window(c, 4)!.canvasFrame == Self.r(0, 981, 600, 857))
-        // The stray joins the grid: its own size, packed right of the rows' end (2000 + 200).
+        // The stray joins the inbox: its own size, packed right of the rows' end (2000 + 200).
         let stray = Self.window(c, 6)!
         #expect(stray.row == nil && stray.canvasFrame == Self.r(2200, 0, 600, 400))
     }
 
     // MARK: ROWS-09
 
-    @Test("ROWS-09 A new window opens in the grid, beside the rows")
+    @Test("ROWS-09 A new window opens in the inbox, beside the rows")
     func rows09() {
         defer { UserDefaults.standard.removeObject(forKey: CanvasController.rowsModeKey) }
         let a = Self.placed(1, canvas: Self.r(0, 100, 600, 400))
@@ -274,19 +274,19 @@ import ScreenCaptureKit
         c.firstSync = false
         c.snapshotTimer = Timer(timeInterval: 3600, repeats: false) { _ in }
         c.rowsMode = true
-        // A window opens where its app put it (below the rows, say): the grid takes it.
+        // A window opens where its app put it (below the rows, say): the inbox takes it.
         let n = Fake.scWindow(id: 3, pid: Fake.firstPID, bundleID: "com.example.app", appName: "Example",
                               frame: CGRect(x: 300, y: 200, width: 500, height: 300))
         Self.scan(c, [a.scWindow, b.scWindow, n], standard: [3])
         let w = Self.window(c, 3)!
         #expect(w.row == nil)
-        // Right of the rows' end (1300) plus the grid gap (200), at its own size.
+        // Right of the rows' end (1300) plus the inbox gap (200), at its own size.
         #expect(w.canvasFrame == Self.r(1500, 0, 500, 300))
     }
 
     // MARK: ROWS-10
 
-    @Test("ROWS-10 A canvas drop lands in the row its middle's in, or back in the grid")
+    @Test("ROWS-10 A canvas drop lands in the row its middle's in, or back in the inbox")
     func rows10() {
         defer { UserDefaults.standard.removeObject(forKey: CanvasController.rowsModeKey) }
         let c = TestCanvas.make(display: Self.docked, windows: [
@@ -301,7 +301,7 @@ import ScreenCaptureKit
         c.rowsDrop(Self.window(c, 1)!, at: Self.r(150, 900, 600, 857))
         #expect(Self.window(c, 1)!.row == 1 && Self.window(c, 1)!.canvasFrame == Self.r(620, 981, 600, 857))
         #expect(Self.window(c, 4)!.canvasFrame == Self.r(1240, 981, 600, 857))
-        // 3 let go right of the rows (they end at 1840, the grid starts at 2040): the grid.
+        // 3 let go right of the rows (they end at 1840, the inbox starts at 2040): the inbox.
         c.rowsDrop(Self.window(c, 3)!, at: Self.r(2100, 0, 600, 857))
         #expect(Self.window(c, 3)!.row == nil && Self.window(c, 3)!.canvasFrame == Self.r(2040, 0, 600, 857))
     }

@@ -1,11 +1,11 @@
 import CoreGraphics
 
 /// The Rows layout: windows in rows that share a top and a height, x free within a row, plus an
-/// "unsorted grid" region to the rows' right for windows that aren't in one. Pure functions over
+/// "inbox" region to the rows' right for windows that aren't in one. Pure functions over
 /// canvas coordinates (y down): no controller, no view, so every rule is unit-tested directly.
 enum RowLayout {
 
-    /// A window to lay out: `row` is which row it's in (nil = the grid); `fixedHeight` keeps the
+    /// A window to lay out: `row` is which row it's in (nil = the inbox); `fixedHeight` keeps the
     /// window's own height, top-aligned in its row (a VM window sizing itself), where the rest
     /// take the row's window height.
     struct Item: Equatable {
@@ -19,17 +19,17 @@ enum RowLayout {
     struct Metrics: Equatable {
         /// Every row's window height (the work area's height less the margins all round).
         var windowHeight: CGFloat
-        /// The space between windows in a row, and between grid items and shelves.
+        /// The space between windows in a row, and between inbox items and shelves.
         var gap: CGFloat
         /// The space between rows: wide enough that a row centred on screen leaves the rows
         /// beside it entirely off it, Dock strip included (see CanvasController.rowMetrics).
         var rowGap: CGFloat
-        /// The canvas y of the first row's top (and the grid's).
+        /// The canvas y of the first row's top (and the inbox's).
         var top: CGFloat = 0
-        /// The space between the rows' right end and the grid region.
-        var gridGap: CGFloat
+        /// The space between the rows' right end and the inbox region.
+        var inboxGap: CGFloat
         /// A shelf wraps to the next once it would get wider than this.
-        var gridMaxWidth: CGFloat
+        var inboxMaxWidth: CGFloat
     }
 
     /// The vertical step from one row's top to the next's.
@@ -45,8 +45,8 @@ enum RowLayout {
 
     /// Canonical positions. Rows: renumbered 0..<n keeping their order (empty rows vanish), each
     /// item at its row's top and height (fixedHeight ones keep theirs), sorted by minX — input
-    /// order on ties — with at least `gap` between neighbours; x is otherwise kept. Grid: packed
-    /// on shelves starting at `gridMinX`, ordered by (minY, minX), wrapping past `gridMaxWidth`
+    /// order on ties — with at least `gap` between neighbours; x is otherwise kept. Inbox: packed
+    /// on shelves starting at `inboxMinX`, ordered by (minY, minX), wrapping past `inboxMaxWidth`
     /// (a wider window gets its own shelf); shelf height = its tallest. Sizes unchanged there.
     static func layout(_ items: [Item], _ m: Metrics) -> [Item] {
         var out = items
@@ -66,17 +66,17 @@ enum RowLayout {
                 right = f.maxX
             }
         }
-        // The grid region to the right of every row.
-        let gridX = gridMinX(out, excluding: nil, m)
-        let grid = sortedGrid(out.indices.filter { out[$0].row == nil }, out)
-        var shelfTop = m.top, x = gridX, shelfHeight: CGFloat = 0
-        for i in grid {
+        // The inbox region to the right of every row.
+        let inboxX = inboxMinX(out, excluding: nil, m)
+        let inbox = sortedInbox(out.indices.filter { out[$0].row == nil }, out)
+        var shelfTop = m.top, x = inboxX, shelfHeight: CGFloat = 0
+        for i in inbox {
             var f = out[i].frame
-            // A shelf that would run past gridMaxWidth wraps; an item alone on one never does,
+            // A shelf that would run past inboxMaxWidth wraps; an item alone on one never does,
             // however wide it is.
-            if x > gridX, x + f.width - gridX > m.gridMaxWidth {
+            if x > inboxX, x + f.width - inboxX > m.inboxMaxWidth {
                 shelfTop += shelfHeight + m.gap
-                x = gridX
+                x = inboxX
                 shelfHeight = 0
             }
             f.origin = CGPoint(x: x, y: shelfTop)
@@ -87,22 +87,22 @@ enum RowLayout {
         return out
     }
 
-    /// The grid region's left edge, computed without the item `excluding` (the dragged one: it
-    /// hasn't landed yet). With no rows the grid starts at the canvas's left plus `gridGap`.
-    static func gridMinX(_ items: [Item], excluding: CGWindowID? = nil, _ m: Metrics) -> CGFloat {
+    /// The inbox region's left edge, computed without the item `excluding` (the dragged one: it
+    /// hasn't landed yet). With no rows the inbox starts at the canvas's left plus `inboxGap`.
+    static func inboxMinX(_ items: [Item], excluding: CGWindowID? = nil, _ m: Metrics) -> CGFloat {
         let right = items.lazy.filter { $0.id != excluding && $0.row != nil }.map(\.frame.maxX).max() ?? 0
-        return right + m.gridGap
+        return right + m.inboxGap
     }
 
     /// The dragged item `id` was let go at `proposed` (the caller snapped it already). Right of
-    /// the rows' end it's back in the grid; anywhere else it lands in the row its middle is in —
+    /// the rows' end it's back in the inbox; anywhere else it lands in the row its middle is in —
     /// a new row opening above the first or below the last when its middle is past them — then
     /// everything settles (see layout). Left neighbours keep their x; the drop lands after the
     /// rightmost one it would overlap, and right neighbours are shoved on by the sweep.
     static func drop(_ id: CGWindowID, at proposed: CGRect, into items: [Item], _ m: Metrics) -> [Item] {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return layout(items, m) }
         var out = items
-        if proposed.midX >= gridMinX(out, excluding: id, m) {
+        if proposed.midX >= inboxMinX(out, excluding: id, m) {
             out[i].row = nil
             out[i].frame.origin = proposed.origin
             return layout(out, m)
@@ -129,7 +129,7 @@ enum RowLayout {
     /// Free → Rows: windows that already form bands become rows. Sorted by top, each window joins
     /// the band when its vertical overlap with it is at least half the smaller height, else opens
     /// the next one. A band of two or more is a row, ordered by its top; a lone window goes to
-    /// the grid. x kept.
+    /// the inbox. x kept.
     static func distribute(_ frames: [(id: CGWindowID, frame: CGRect, fixedHeight: Bool)],
                            _ m: Metrics) -> [Item] {
         var bands: [(minY: CGFloat, maxY: CGFloat, members: [(id: CGWindowID, frame: CGRect, fixedHeight: Bool)])] = []
@@ -188,7 +188,7 @@ enum RowLayout {
     }
 
     /// Indices into `items` ordered by (minY, minX), input order on ties.
-    private static func sortedGrid(_ idxs: [Int], _ items: [Item]) -> [Int] {
+    private static func sortedInbox(_ idxs: [Int], _ items: [Item]) -> [Int] {
         idxs.sorted {
             let a = items[$0].frame, b = items[$1].frame
             if a.minY != b.minY { return a.minY < b.minY }

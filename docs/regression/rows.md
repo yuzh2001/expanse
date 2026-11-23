@@ -3,7 +3,7 @@
 [All areas](README.md)
 
 The Rows layout mode ("Arrange in rows"): rows of windows sharing a top and a height, x free
-within a row, plus an "unsorted grid" to the rows' right. `RowLayout` is pure functions exercised
+within a row, plus an "inbox" to the rows' right. `RowLayout` is pure functions exercised
 directly; the later cases cover it wired into the canvas, fake windows standing in for real ones.
 
 ## ROWS-01 A row shares its top and height
@@ -19,17 +19,17 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
 - **Automate:** unit: `layout` on rows with unsorted, overlapping frames and a sized-itself
   window, and on non-contiguous row indices.
 
-## ROWS-02 The grid sits right of the rows and packs on shelves
+## ROWS-02 The inbox sits right of the rows and packs on shelves
 - **Type:** Feature
 - **Area:** ROWS
 - **Commits:** unreleased (23 Nov)
 - **Setup:** Rowed windows plus windows in no row.
 - **Steps:** Lay the set out.
-- **Expected:** The unrowed windows pack left to right from a grid gap right of the rows' right
+- **Expected:** The unrowed windows pack left to right from a inbox gap right of the rows' right
   end, ordered by their spot's (top, left), at their own sizes, the gap between neighbours.
-  Reaching the grid's max width wraps to a new shelf under the tallest of the last; a window
+  Reaching the inbox's max width wraps to a new shelf under the tallest of the last; a window
   wider than a whole shelf gets one to itself.
-- **Automate:** unit: `layout` with mixed sizes past `gridMaxWidth`, checking shelf rows, and
+- **Automate:** unit: `layout` with mixed sizes past `inboxMaxWidth`, checking shelf rows, and
   ordering by (minY, minX).
 
 ## ROWS-03 Laying out is stable
@@ -39,7 +39,7 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
 - **Setup:** Any set of items.
 - **Steps:** Lay it out twice.
 - **Expected:** The second layout changes nothing (`layout` is idempotent).
-- **Automate:** unit: `layout(layout(x)) == layout(x)` on a mixed rows-and-grid set.
+- **Automate:** unit: `layout(layout(x)) == layout(x)` on a mixed rows-and-inbox set.
 
 ## ROWS-04 Dropping into a row inserts and shoves right
 - **Type:** Feature
@@ -54,7 +54,7 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
 - **Automate:** unit: `drop` into a row's middle and over a left neighbour's end, checking the
   shoved neighbours' new x.
 
-## ROWS-05 Dropping past the rows opens a new row; into the grid puts it back
+## ROWS-05 Dropping past the rows opens a new row; into the inbox puts it back
 - **Type:** Feature
 - **Area:** ROWS
 - **Commits:** unreleased (23 Nov)
@@ -64,11 +64,11 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
   2. Let go below the last.
   3. Let go with its middle right of the rows' right end.
 - **Expected:** Step 1 opens a new row 0 and pushes the others down; step 2 opens one at the
-  bottom; step 3 puts it back in the grid at the grid's packed spot, at its own size.
+  bottom; step 3 puts it back in the inbox at the inbox's packed spot, at its own size.
 - **Automate:** unit: `drop` with middles before the first row, past the last, and right of
-  `gridMinX`.
+  `inboxMinX`.
 
-## ROWS-06 Switching to Rows puts bands into rows and strays into the grid
+## ROWS-06 Switching to Rows puts bands into rows and strays into the inbox
 - **Type:** Feature
 - **Area:** ROWS
 - **Commits:** unreleased (23 Nov)
@@ -76,7 +76,7 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
 - **Steps:** Switch to Rows (`RowLayout.distribute`).
 - **Expected:** Windows sorted by top group into bands — a window joins a band when its vertical
   overlap with it is at least half the smaller height. A band of two or more becomes a row
-  (rows ordered by their top, x kept); a lone window goes to the grid.
+  (rows ordered by their top, x kept); a lone window goes to the inbox.
 - **Automate:** unit: `distribute` on an aligned trio, on two far-apart bands, and with a stray
   singleton below them.
 
@@ -101,22 +101,22 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
 - **Setup:** "Arrange in rows" off, windows loosely in bands on the canvas.
 - **Steps:** Turn "Arrange in rows" on in the menu bar panel.
 - **Expected:** Bands become rows — every window at its row's top at the work area's height
-  (the screen less the menu bar, the Dock and the margins); strays go to the grid right of the
+  (the screen less the menu bar, the Dock and the margins); strays go to the inbox right of the
   rows at their own sizes. The rows' windows are resized for real; x is kept where nothing
   overlaps.
 - **Automate:** unit: `rowsMode = true` on a fake canvas with two bands and a stray.
 
-## ROWS-09 A new window opens in the grid
+## ROWS-09 A new window opens in the inbox
 - **Type:** Feature
 - **Area:** ROWS
 - **Commits:** unreleased (23 Nov)
 - **Setup:** "Arrange in rows" on.
 - **Steps:** Open a window anywhere.
-- **Expected:** It joins the unsorted grid right of the rows at its own size (no row is made for
+- **Expected:** It joins the unsorted inbox right of the rows at its own size (no row is made for
   it, and nothing in a row moves), and the view glides there as for any window opened off screen.
 - **Automate:** unit: a scan bringing a new standard window, on a rows canvas.
 
-## ROWS-10 A canvas drop lands in a row or back in the grid
+## ROWS-10 A canvas drop lands in a row or back in the inbox
 - **Type:** Feature
 - **Area:** ROWS
 - **Commits:** unreleased (23 Nov)
@@ -125,9 +125,9 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
   1. Drag a window so its middle is in another row, over a window's right end.
   2. Drag one right past the rows' right end.
 - **Expected:** Step 1 lands it in that row after the window it overlapped, the windows to its
-  right shoved on; step 2 puts it back in the grid. While you drag, only x snaps — y follows the
+  right shoved on; step 2 puts it back in the inbox. While you drag, only x snaps — y follows the
   pointer — and no built-screen drop zones appear.
-- **Automate:** unit: `rowsDrop` between rows and into the grid region.
+- **Automate:** unit: `rowsDrop` between rows and into the inbox region.
 
 ## ROWS-11 A display change re-lays the rows
 - **Type:** Feature
@@ -146,8 +146,8 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
 - **Setup:** "Arrange in rows" on.
 - **Steps:** Quit Expanse and open it again; come back from minimising a window, or bring its
   next tab forward; restore a snapshot.
-- **Expected:** Windows come back in their rows and the grid, since the row is saved with the
-  spot and restored with it (layouts saved before rows have no row — the grid — and still load).
+- **Expected:** Windows come back in their rows and the inbox, since the row is saved with the
+  spot and restored with it (layouts saved before rows have no row — the inbox — and still load).
 - **Automate:** unit: `savedEntry` → file → `takeSpot`, plus a tab-takeover `Departed` row.
 
 ## ROWS-13 Dragging on the canvas snaps sideways only

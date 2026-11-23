@@ -750,7 +750,7 @@ final class CanvasView: NSView {
                 controller.arrange(d.placements, screen: d.screen.origin, members: d.members, how: "drop")
             } else if dragged {
                 if controller.rowsMode {
-                    // The row its middle is in, or back in the grid (see CanvasController.rowsDrop).
+                    // The row its middle is in, or back in the inbox (see CanvasController.rowsDrop).
                     controller.rowsDrop(w, at: w.canvasFrame)
                 } else {
                     controller.noteUserMove(w, from: startFrame.origin)
