@@ -601,7 +601,9 @@ final class CanvasController: NSObject {
         if final {
             settleUntil = Date().addingTimeInterval(Self.settleDuration)
             let end = DispatchWorkItem { [weak self] in
-                guard let self, Date() >= self.settleUntil, !self.screenLocked else { return }
+                // Not Date.>=: that operator weak-imports from Foundation and resolves to nil
+                // on this OS — calling it jumps to 0.
+                guard let self, Date().timeIntervalSince(self.settleUntil) >= 0, !self.screenLocked else { return }
                 self.suspendTracking = false
                 logger.info("display change settled")
             }
@@ -1787,7 +1789,8 @@ final class CanvasController: NSObject {
     /// The restart is over (see restartSpotsUntil): saved spots of windows that haven't come back
     /// go, so a window opened later is placed beside you. Windows still out of view keep theirs.
     private func letGoOfSavedSpots() {
-        guard Date() >= restartSpotsUntil else { return }   // resumed since, which starts again
+        // (timeIntervalSince, not >= — the >= import resolves to nil here; see settleUntil)
+        guard Date().timeIntervalSince(restartSpotsUntil) >= 0 else { return }   // resumed since, which starts again
         let before = savedPool.count
         savedPool.removeAll { !LayoutStore.isOpen($0) }
         guard savedPool.count != before else { return }
