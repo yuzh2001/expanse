@@ -908,4 +908,42 @@ struct DISPLAYTests {
         #expect(c.parkSide == .right)
         #expect(!c.parkingArea.contains(CGRect(x: -1000, y: 950, width: 800, height: 600)))
     }
+
+    // MARK: DISPLAY-31
+
+    @Test("DISPLAY-31 A window that would straddle onto another display stays a picture on the main one")
+    func display31() {
+        // Two 2048×1152 displays side by side, separate Spaces: the one to the right.
+        let right = CGRect(x: 2048, y: 0, width: 2048, height: 1152)
+        let straddler = Self.win(3101, 1728, 100, 800, 600) // 40% on main, 60% on the right display
+        let mostlyMain = Self.win(3102, 1488, 100, 800, 600) // 70% on main
+        let c = TestCanvas.make(display: TestDisplay(size: CGSize(width: 2048, height: 1152), menuBar: 25),
+                                windows: [straddler, mostlyMain])
+        defer { Self.finish(c) }
+        // One display: both go on screen at their spots.
+        var plan = c.commitPlan()
+        #expect(plan[0].1 == CGPoint(x: 1728, y: 125) && plan[0].2 == false)
+        #expect(plan[1].1 == CGPoint(x: 1488, y: 125) && plan[1].2 == false)
+
+        // With the display on the right: the straddler stays parked — placed, macOS would draw
+        // it on the right display only, and it would join that display's Space. The backdrop
+        // draws what shows of it on main. The window mostly on main is placed as before.
+        c.otherDisplaysOverride = [right]
+        plan = c.commitPlan()
+        #expect(plan[0].2 == true && plan[0].1 == CGPoint(x: -799, y: 1151))
+        #expect(plan[1].1 == CGPoint(x: 1488, y: 125) && plan[1].2 == false)
+
+        // The rule, directly: as much on other displays as on the main one (or more) keeps it off.
+        let vp = c.viewport
+        func goes(_ x: CGFloat) -> Bool {
+            CanvasController.goesOnScreen(CGRect(x: x, y: 125, width: 800, height: 600),
+                                          in: vp, panels: .null, others: [right])
+        }
+        #expect(!goes(1728)) // 60% on the right display
+        #expect(goes(1488))  // 30% on it
+        #expect(!goes(1648)) // exactly half: macOS could draw it on either
+        // Without the display, the same spot goes on screen.
+        #expect(CanvasController.goesOnScreen(CGRect(x: 1728, y: 125, width: 800, height: 600),
+                                              in: vp, panels: .null))
+    }
 }

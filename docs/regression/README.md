@@ -1,6 +1,6 @@
 # Regression tests
 
-Every feature Expanse has, and every bug it has fixed, as a test case: 491 cases, from all 174
+Every feature Expanse has, and every bug it has fixed, as a test case: 492 cases, from all 174
 commits from 0.1.0 to 0.1.34 (26–30 Oct 2026) and the changes since. A bug fix's case says what
 went wrong **before** the fix and what must happen **now**, so a later change can't quietly bring
 it back. Every case has a test: unit tests for the logic, and end-to-end cases that drive the real
@@ -14,7 +14,7 @@ app (see Running them).
 | [TRACK](tracking.md) | Finding and following windows | 47 | 32 |
 | [SIZE](sizes.md) | Window sizes | 21 | 10 |
 | [PERSIST](layouts-and-restarts.md) | Layouts, restarts and snapshots | 43 | 22 |
-| [DISPLAY](displays-lock-sleep.md) | Displays, lock and sleep | 30 | 23 |
+| [DISPLAY](displays-lock-sleep.md) | Displays, lock and sleep | 31 | 24 |
 | [SPACES](spaces-and-full-screen.md) | Full-screen apps and Spaces | 30 | 19 |
 | [CAPTURE](capture-and-performance.md) | Capture and performance | 41 | 30 |
 | [UI](panels-and-look.md) | Menu bar panel, minimap, Settings and the backdrop | 42 | 9 |
@@ -23,7 +23,7 @@ app (see Running them).
 | [UPDATE](updates-and-install.md) | Updates, release builds and install | 19 | 2 |
 | [URL](url-scripting.md) | expanse:// scripting | 28 | 1 |
 | [SEC](security.md) | Security hardening | 30 | 25 |
-| | **Total** | **491** | **213** |
+| | **Total** | **492** | **214** |
 
 [Coverage](coverage.md) lists every commit with the cases that test it, or why none does (docs
 only, a reverted experiment, an empty merge, a release commit).
@@ -34,7 +34,7 @@ Every case has a test (`scripts/test-coverage.sh` checks it): a unit test for ea
 **unit**, and an end-to-end case, a unit test of its logic, or both, for each case marked
 **manual**. A test's name starts with its case's ID.
 
-**Unit tests** (Tests/ExpanseTests, 596 of them, about a minute and a half). Run them before every commit:
+**Unit tests** (Tests/ExpanseTests, 597 of them, about a minute and a half). Run them before every commit:
 ```bash
 scripts/test.sh
 ```
