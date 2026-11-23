@@ -12,6 +12,7 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         case grantAccessibility, grantScreenRecording, installUpdate
         case detailedLogging(Bool), copyLogs, showLogFile, reportIssue
         case openAtLogin(Bool), gap(CGFloat), motion(String), automaticUpdates(Bool), checkForUpdates
+        case floatRules([FloatRule])
         case welcome, quit
 
         /// Switches and picks leave the panel open, to see them take; commands close it, as a
@@ -19,7 +20,7 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         var closesPanel: Bool {
             switch self {
             case .setPaused, .autoCentre, .wallpaper, .names, .corner, .detailedLogging, .takeSnapshot,
-                 .openAtLogin, .gap, .motion, .automaticUpdates, .rows: false
+                 .openAtLogin, .gap, .motion, .automaticUpdates, .rows, .floatRules: false
             default: true
             }
         }
@@ -60,9 +61,11 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         var gap: CGFloat = 20
         var motion = "follow"
         var automaticUpdates = true
+        /// The float rules, as the Floats page edits them (see WindowRules).
+        var floatRules: [FloatRule] = []
     }
 
-    enum Page { case main, settings }
+    enum Page { case main, settings, floats }
 
     /// An earlier layout (see LayoutStore.snapshots), drawn from its windows.
     struct Layout: Identifiable, Equatable {
@@ -78,6 +81,7 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         var perform: (Action) -> Void = { _ in }
         var troubleshoot: () -> Void = {}
         var settings: () -> Void = {}
+        var pickApp: () -> Void = {}
         var contentHeight: (CGFloat) -> Void = { _ in }
     }
 
@@ -115,6 +119,7 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         model.perform = { [weak self] in self?.run($0) }
         model.troubleshoot = { [weak self] in self?.showTroubleshooting() }
         model.settings = { [weak self] in self?.showSettings() }
+        model.pickApp = { [weak self] in self?.showAppPicker() }
         model.contentHeight = { [weak self] height in DispatchQueue.main.async { self?.fit(height) } }
         button.target = self
         button.action = #selector(clicked)
@@ -259,6 +264,30 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         menuOpen = false
     }
 
+    /// The running regular apps, for a new float rule on the Floats page: picks one and adds it
+    /// (an app already covered is listed but greyed out). A native menu, under the pointer.
+    private func showAppPicker() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let taken = Set(WindowRules.rules.map(\.bundleID))
+        for app in NSWorkspace.shared.runningApplications
+            .filter({ $0.activationPolicy == .regular && !$0.isTerminated && $0 != NSRunningApplication.current })
+            .sorted(by: { ($0.localizedName ?? "") < ($1.localizedName ?? "") }) {
+            guard let bundle = app.bundleIdentifier, let name = app.localizedName else { continue }
+            let item = ClosureItem(name, enabled: !taken.contains(bundle)) { [weak self] in
+                var rules = WindowRules.rules
+                rules.append(FloatRule(bundleID: bundle, appName: name))
+                self?.run(.floatRules(rules))
+            }
+            if let icon = app.icon { icon.size = NSSize(width: 16, height: 16); item.image = icon }
+            menu.addItem(item)
+        }
+        guard let view = panel.contentView else { return }
+        menuOpen = true
+        menu.popUp(positioning: nil, at: view.convert(panel.mouseLocationOutsideOfEventStream, from: nil), in: view)
+        menuOpen = false
+    }
+
     private func makePanel() -> NSPanel {
         let p = Panel(contentRect: CGRect(x: 0, y: 0, width: Self.width, height: 400),
                       styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
@@ -353,7 +382,11 @@ private struct PanelView: View {
 
     var body: some View {
         Group {
-            if model.page == .settings { SettingsPage(model: model) } else { mainPage }
+            switch model.page {
+            case .main: mainPage
+            case .settings: SettingsPage(model: model)
+            case .floats: FloatsPage(model: model)
+            }
         }
         .padding(10)
         .frame(width: MenuPanel.width)
@@ -466,6 +499,23 @@ private struct PanelView: View {
             SwitchRow(title: "Desktop picture background", isOn: binding(state.wallpaper) { .wallpaper($0) })
             SwitchRow(title: "Window names when zoomed out", isOn: binding(state.names) { .names($0) })
             SwitchRow(title: "Arrange in rows", isOn: binding(state.rows) { .rows($0) })
+            Button { model.page = .floats } label: {
+                HStack(spacing: 8) {
+                    Text("Floating windows").font(.system(size: 12))
+                    Spacer(minLength: 8)
+                    Text("\(state.floatRules.count)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 30)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressStyle())
+            .help("Apps whose new windows float over your work instead of joining the layout")
         }
         .padding(.vertical, 4)
         .card()
@@ -593,6 +643,128 @@ private struct SettingsPage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
         .disabled(!isRelease)
+    }
+}
+
+// MARK: - Floating windows
+
+/// The float rules: which apps' new windows float over your work instead of joining the layout
+/// (in Rows mode), until you focus a managed window — then they drop into the inbox. Each rule
+/// is an app's bundle ID, optionally narrowed to windows that aren't its main one, or whose
+/// title matches a regular expression. The table persists in defaults (see WindowRules.rules);
+/// Reset puts the built-in set back.
+private struct FloatsPage: View {
+    @ObservedObject var model: MenuPanel.Model
+    private var rules: [FloatRule] { model.state.floatRules }
+    @State private var expanded: Int? = nil
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 4) {
+                FooterButton(symbol: "chevron.left", help: "Back") { model.page = .main }
+                Text("Floating windows").font(.system(size: 13, weight: .semibold))
+                Spacer(minLength: 0)
+                LinkButton(title: "Reset") { model.perform(.floatRules(WindowRules.builtIn)) }
+                    .help("Back to the built-in table")
+            }
+            Text("A new window from these apps floats over what you're doing instead of joining the layout, until you focus a managed window — then it drops into the inbox. Rows mode only.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+            VStack(spacing: 0) {
+                ForEach(rules.indices, id: \.self) { i in row(rules[i], at: i) }
+            }
+            .card()
+            HStack(spacing: 6) {
+                LinkButton(title: "Add app…") { model.pickApp() }
+                Text("·").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Text("A rule covers every new window the app opens; narrow it below.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 2)
+        }
+    }
+
+    /// A rule row: its switch, the app's name and bundle ID, and a chevron that opens the
+    /// narrowing (title pattern, non-main only) and the delete button.
+    private func row(_ rule: FloatRule, at i: Int) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Toggle(rule.appName, isOn: Binding(
+                    get: { rule.enabled },
+                    set: { on in update(i) { $0.enabled = on } }))
+                .toggleStyle(.switch).labelsHidden().controlSize(.mini)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(rule.appName).font(.system(size: 12))
+                    Text(detail(rule))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Button { expanded = expanded == i ? nil : i } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(expanded == i ? 90 : 0))
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressStyle())
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            if expanded == i {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text("Title matches").font(.system(size: 11)).foregroundStyle(.secondary)
+                        TextField("regular expression", text: Binding(
+                            get: { rule.titlePattern ?? "" },
+                            set: { t in update(i) { $0.titlePattern = t.isEmpty ? nil : t } }))
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11))
+                    }
+                    Toggle("Only windows that aren't the app's main window", isOn: Binding(
+                        get: { rule.nonMainOnly },
+                        set: { on in update(i) { $0.nonMainOnly = on } }))
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 11))
+                    HStack {
+                        Spacer()
+                        LinkButton(title: "Remove") { remove(i) }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+            }
+        }
+    }
+
+    private func detail(_ rule: FloatRule) -> String {
+        var d = rule.bundleID
+        if let p = rule.titlePattern { d += " · title ~ \(p)" }
+        if rule.nonMainOnly { d += " · not its main window" }
+        return d
+    }
+
+    private func update(_ i: Int, _ change: (inout FloatRule) -> Void) {
+        var rules = rules
+        guard rules.indices.contains(i) else { return }
+        change(&rules[i])
+        model.perform(.floatRules(rules))
+    }
+
+    private func remove(_ i: Int) {
+        var rules = rules
+        guard rules.indices.contains(i) else { return }
+        rules.remove(at: i)
+        expanded = nil
+        model.perform(.floatRules(rules))
     }
 }
 

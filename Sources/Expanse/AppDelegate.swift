@@ -358,7 +358,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                detailedLogging: LogFile.shared.isEnabled,
                                hasLogFile: FileManager.default.fileExists(atPath: LogFile.shared.url.path),
                                gap: CanvasController.gap, motion: CanvasController.motion,
-                               automaticUpdates: Updater.shared.automatic)
+                               automaticUpdates: Updater.shared.automatic,
+                               floatRules: WindowRules.rules)
     }
 
     private func perform(_ action: MenuPanel.Action) {
@@ -379,6 +380,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .takeSnapshot: controller.takeSnapshot()
         case .autoCentre(let on): controller.autoCentre = on
         case .rows(let on): controller.rowsMode = on
+        case .floatRules(let rules): WindowRules.rules = rules
         case .wallpaper(let on):
             Wallpaper.enabled = on
             controller.refreshWallpaper()

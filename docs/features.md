@@ -38,7 +38,9 @@ What we might build next. New requests go in as they come up, and finished work 
   System Settings and Finder, an app's non-main windows like WeChat's viewers — opens over the
   window you're in instead of joining the layout. Focusing a managed window, or going to the
   canvas, sweeps every floater into the inbox; closing one returns focus to the window you were
-  in. The rules are a predefined table (see WindowRules).
+  in. The rules are a predefined table (see WindowRules), edited on the menu bar panel's
+  Floating windows page: switches, a per-rule title pattern and non-main-only check, adding a
+  running app, and Reset (UI-44).
 
 ## Bugs
 

@@ -17,7 +17,7 @@ app (see Running them).
 | [DISPLAY](displays-lock-sleep.md) | Displays, lock and sleep | 31 | 24 |
 | [SPACES](spaces-and-full-screen.md) | Full-screen apps and Spaces | 30 | 19 |
 | [CAPTURE](capture-and-performance.md) | Capture and performance | 41 | 30 |
-| [UI](panels-and-look.md) | Menu bar panel, minimap, Settings and the backdrop | 43 | 10 |
+| [UI](panels-and-look.md) | Menu bar panel, minimap, Settings and the backdrop | 44 | 11 |
 | [SETUP](first-launch.md) | First launch and permissions | 27 | 7 |
 | [SUPPORT](troubleshooting.md) | Troubleshooting and logs | 11 | 0 |
 | [UPDATE](updates-and-install.md) | Updates, release builds and install | 19 | 2 |
@@ -25,7 +25,7 @@ app (see Running them).
 | [SEC](security.md) | Security hardening | 30 | 25 |
 | [ROWS](rows.md) | Rows layout | 15 | 1 |
 | [FLOAT](floating.md) | Floating windows | 5 | 0 |
-| | **Total** | **513** | **216** |
+| | **Total** | **514** | **217** |
 
 [Coverage](coverage.md) lists every commit with the cases that test it, or why none does (docs
 only, a reverted experiment, an empty merge, a release commit).

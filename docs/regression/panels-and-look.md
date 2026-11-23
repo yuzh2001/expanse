@@ -523,3 +523,20 @@
 - **Automate:** unit: live mode places a 56×179 panel centred in a 65pt strip (44×141 at 8pt
   with none), the Spaces panel level with it and `panelsFrame` matching; active mode the full
   208×136.
+
+## UI-44 The Floating windows page edits the float rules
+- **Type:** Feature
+- **Area:** UI
+- **Commits:** unreleased (25 Nov)
+- **Setup:** The menu bar panel open.
+- **Steps:**
+  1. Click "Floating windows" under the switches.
+  2. Turn a rule's switch off, open a rule's chevron, edit its Title matches field and its
+     non-main checkbox, and press Remove on another rule.
+  3. Click "Add app…" and pick a running app.
+  4. Click Reset.
+- **Expected:** The page takes the panel's place like Settings does, listing every rule with its
+  app's name and bundle ID; each edit writes the rules at once, the panel stays open, and Reset
+  brings the built-in table back.
+- **Automate:** unit: `Action.floatRules` keeps the panel open and needs no canvas; the entry and
+  page strings; `WindowRules.rules` through `AppDelegate.perform`.

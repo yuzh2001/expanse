@@ -809,4 +809,24 @@ import SwiftUI
         v.render()
         #expect(v.minimapGlass.frame == CGRect(x: v.bounds.maxX - 141 - 16, y: 8, width: 141, height: 44))
     }
+
+    @Test("UI-44 The Floating windows page edits the float rules (logic)") func ui44() {
+        #expect(!MenuPanel.Action.floatRules(WindowRules.builtIn).closesPanel)
+        #expect(!MenuPanel.Action.floatRules(WindowRules.builtIn).needsCanvas)
+        // The entry on the main page names the page.
+        let state = MenuPanel.State(isOn: true, floatRules: WindowRules.builtIn)
+        let switches = Self.strings(in: Self.panelView(state).switches)
+        #expect(switches.contains("Floating windows"))
+        // The page says what the rules do and how to add one …
+        let model = MenuPanel.Model()
+        model.state = state
+        let page = FloatsPage(model: model)
+        let strings = Self.strings(in: page.body)
+        #expect(strings.contains("Add app…") && strings.contains("Reset"))
+        // … and each row carries the app's name, its bundle ID and its narrowing.
+        let rule = FloatRule(bundleID: "com.example.app", appName: "Example", titlePattern: "sheet", nonMainOnly: true)
+        let row = Self.strings(in: page.row(rule, at: 0))
+        #expect(row.contains("Example"))
+        #expect(row.contains("com.example.app · title ~ sheet · not its main window"))
+    }
 }
