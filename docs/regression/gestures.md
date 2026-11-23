@@ -1,24 +1,20 @@
 # Trackpad gestures
 
-Three- and four-finger gestures on the trackpad, read straight from MultitouchSupport: three
-fingers drag the canvas like a scroll, four fingers up open or leave it (as ⌥`), four
-fingers down go to the window under the mouse. Nothing is swallowed, so macOS's own swipes
-for the same finger counts fire too — turn them off in Trackpad settings. The panel's
-"Trackpad gestures" switch turns the whole thing off; it's on by default.
+Four-finger swipes on the trackpad, read straight from MultitouchSupport: four fingers up open
+or leave the canvas (as ⌥`), four fingers down go to the window under the mouse. Nothing is
+swallowed, so macOS's own swipes for the same finger count fire too — turn them off in
+Trackpad settings. The panel's "Trackpad gestures" switch turns the whole thing off; it's on
+by default.
 
-## SWIPE-01 Three fingers pan, four swipe, once per touch-down
+## SWIPE-01 Four fingers swipe, once per touch-down
 - **Type:** Feature
 - **Area:** Gestures
-- **Steps:** With macOS's own three- and four-finger swipes off, drag three fingers any way —
-  on the canvas or, at 100%, anywhere — and swipe four fingers up or down.
-- **Expected:** Three fingers pan like ⌃⌥ + scroll: at 100% the canvas opens first, then the
-  drag pans it, snapping when it ends — and a beat (~0.6s) of stillness goes to the window
-  under the mouse, the four-up-then-down flow in one gesture. Four fingers up zoom out to
-  the canvas or back; four fingers down go to the window under the mouse. One swipe fires once, fingers landing a beat apart make one gesture of the
-  final count, and fingers left on the pad after a swipe don't restart as a pan.
-- **Automate:** unit: `SwipeRecognizer.frame` over canned frames — pan deltas per settled
-  frame, a panEnd when the touch ends, a swipe's direction and finger count right, re-armed
-  after all fingers lift.
+- **Steps:** With macOS's own four-finger swipes off, swipe four fingers up or down.
+- **Expected:** Four fingers up zoom out to the canvas or back; four fingers down go to the
+  window under the mouse. A swipe fires once, fingers landing a beat apart make one gesture,
+  and fingers left on the pad after a swipe don't fire again.
+- **Automate:** unit: `SwipeRecognizer.frame` over canned frames — a swipe's direction right,
+  once per touch-down, re-armed after all fingers lift.
 
 ## SWIPE-02 Other touches never fire
 - **Type:** Feature
@@ -49,7 +45,7 @@ for the same finger counts fire too — turn them off in Trackpad settings. The 
   fingers remain, `firedWithin` holds through the gap to the swipe's delivery, and both are
   off again for a fresh two-finger scroll.
 
-## SWIPE-05 A palm plus two fingers isn't a three-finger gesture
+## SWIPE-05 A palm plus two fingers isn't a gesture
 - **Type:** Bug
 - **Area:** Gestures
 - **Steps:** Rest the heel of your hand on the trackpad's near edge (as when typing) and

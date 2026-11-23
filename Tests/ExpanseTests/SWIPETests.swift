@@ -5,9 +5,9 @@ import AppKit
 @_private(sourceFile: "MenuPanel.swift") @testable import Expanse
 
 /// TrackpadGestures.SwipeRecognizer: raw finger counts and centers in, gestures out. The frames
-/// are fractions of the trackpad (0…1, y up): three settled fingers report every move as a pan,
-/// four fire one swipe per touch-down — and only once the finger count has held still for a few
-/// frames, so a finger landing late still joins it.
+/// are fractions of the trackpad (0…1, y up): four fingers fire one swipe per touch-down — and
+/// only once the count has held still for a few frames, so a finger landing late still joins it.
+/// Any other count is ignored.
 @Suite("SWIPE: Trackpad swipe recognition") struct SWIPETests {
 
     /// `steps` of (fingers down, center x, center y), events collected.
@@ -20,11 +20,6 @@ import AppKit
         .swipe(fingers: fingers, direction: d)
     }
 
-    /// The pan deltas in `events` — Doubles that can't be compared exactly.
-    private static func pans(_ events: [SwipeRecognizer.Event]) -> [(dx: Double, dy: Double)] {
-        events.compactMap { if case .pan(let dx, let dy) = $0 { return (dx, dy) }; return nil }
-    }
-
     @Test("SWIPE-01 A four-finger swipe fires once, up or down")
     func fourUpDown() {
         let up = Self.run([(4, 0.5, 0.5), (4, 0.5, 0.53), (4, 0.5, 0.57), (4, 0.5, 0.7), (0, 0, 0)])
@@ -33,33 +28,10 @@ import AppKit
         #expect(down == [Self.swipe(4, .down)])
     }
 
-    @Test("SWIPE-01 Three settled fingers pan with every move, ending when they lift")
-    func threePans() {
-        let events = Self.run([(3, 0.5, 0.5), (3, 0.5, 0.52), (3, 0.5, 0.55), (3, 0.5, 0.58),
-                               (3, 0.5, 0.62), (0, 0, 0)])
-        let pans = Self.pans(events)
-        // Two settled moving frames: two deltas, and the pan ends on lift.
-        #expect(pans.count == 2 && pans.allSatisfy { $0.dx == 0 && $0.dy > 0 })
-        #expect(events.last == .panEnd)
-        // Diagonals report both axes.
-        #expect(Self.pans(Self.run([(3, 0.5, 0.5), (3, 0.52, 0.52), (3, 0.55, 0.55), (3, 0.58, 0.58)]))
-                .allSatisfy { $0.dx > 0 && $0.dy > 0 })
-    }
-
-    @Test("SWIPE-01 A finger joining or leaving ends the pan")
-    func panEnds() {
-        // Three panning, one lifts: the pan ends and nothing more comes of the touch.
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.5, 0.52), (3, 0.5, 0.55), (3, 0.5, 0.58),
-                          (2, 0.5, 0.58), (2, 0.5, 0.8)]).last == .panEnd)
-        // A fourth joining: the pan ends, the touch is a four-finger candidate again.
-        let events = Self.run([(3, 0.5, 0.5), (3, 0.5, 0.53), (3, 0.5, 0.56), (3, 0.5, 0.59),
-                               (4, 0.5, 0.5), (4, 0.5, 0.52), (4, 0.5, 0.55), (4, 0.5, 0.58), (4, 0.5, 0.62)])
-        #expect(events.contains(.panEnd) && events.last == Self.swipe(4, .up))
-    }
-
-    @Test("SWIPE-01 Fingers landing a frame apart make one swipe of the final count")
+    @Test("SWIPE-01 Fingers landing a frame apart make one swipe")
     func staggered() {
-        // Three fingers down, then a fourth joins before the gesture settles: a four-finger swipe.
+        // Three fingers down, then a fourth joins: the four together are the swipe — the
+        // three alone never started anything.
         #expect(Self.run([(3, 0.5, 0.5), (4, 0.51, 0.51), (4, 0.51, 0.53), (4, 0.51, 0.56), (4, 0.51, 0.6)])
                 == [Self.swipe(4, .up)])
     }
@@ -67,6 +39,7 @@ import AppKit
     @Test("SWIPE-02 Two-finger scrolls and palms never fire")
     func otherCounts() {
         #expect(Self.run([(2, 0.5, 0.5), (2, 0.5, 0.8), (2, 0.8, 0.8), (0, 0, 0)]).isEmpty)
+        #expect(Self.run([(3, 0.5, 0.5), (3, 0.5, 0.8), (3, 0.8, 0.8), (0, 0, 0)]).isEmpty)
         #expect(Self.run([(5, 0.5, 0.5), (5, 0.5, 0.8), (0, 0, 0)]).isEmpty)
     }
 
@@ -88,9 +61,9 @@ import AppKit
         #expect(events == [Self.swipe(4, .up), Self.swipe(4, .left)])
     }
 
-    @Test("SWIPE-01 Fingers left on the pad after a swipe don't pan")
-    func noPanAfterSwipe() {
-        // The swipe fired: dropping to three fingers mid-arc doesn't restart as a pan.
+    @Test("SWIPE-01 Fingers left on the pad after a swipe don't fire again")
+    func quietAfterSwipe() {
+        // The swipe fired: dropping to three fingers mid-arc doesn't restart as anything.
         #expect(Self.run([(4, 0.5, 0.5), (4, 0.5, 0.55), (4, 0.5, 0.6), (4, 0.5, 0.9),
                           (3, 0.5, 0.9), (3, 0.5, 0.8), (0, 0, 0)]) == [Self.swipe(4, .up)])
     }
@@ -111,15 +84,15 @@ import AppKit
             f.storeBytes(of: Float(0.5), toByteOffset: 32, as: Float.self)
             f.storeBytes(of: Float(0.5), toByteOffset: 36, as: Float.self)
         }
-        // Three fingers down: a gesture begins, its recognizer kept for the device.
-        g.frame(device, touches, 3, 0)
+        // Four fingers down: a gesture begins, its recognizer kept for the device.
+        g.frame(device, touches, 4, 0)
         #expect(g.recognizers.count == 1)
         // Off: frames are dropped whole and the gesture under way forgotten, so fingers still
         // down when it comes back on can't finish it.
         g.enabled = false
-        g.frame(device, touches, 3, 0.1)
+        g.frame(device, touches, 4, 0.1)
         #expect(g.recognizers.isEmpty)
-        g.frame(device, touches, 3, 0.2)
+        g.frame(device, touches, 4, 0.2)
         #expect(g.recognizers.isEmpty)
     }
 
@@ -186,7 +159,7 @@ import AppKit
         #expect(j.fingers([(path: 5, x: 0.5, y: 0.5, size: 0.8)]).count == 1)
     }
 
-    @Test("SWIPE-05 A palm plus two fingers isn't a three-finger gesture")
+    @Test("SWIPE-05 A palm contact doesn't count toward the finger count")
     func palmPlusTwo() {
         let g = TrackpadGestures()
         let device = UnsafeMutableRawPointer.allocate(byteCount: 8, alignment: 8)
@@ -205,14 +178,15 @@ import AppKit
             g.frame(device, touches, cs.count, t)
         }
         let key = UInt(bitPattern: device)
-        // A heel resting on the near rim plus two scrolling fingers: the recognizer sees two.
-        frame([(1, 0.5, 0.02, 1.9), (2, 0.4, 0.5, 0.8), (3, 0.6, 0.5, 0.8)], at: 0)
-        frame([(1, 0.5, 0.02, 1.9), (2, 0.4, 0.6, 0.8), (3, 0.6, 0.6, 0.8)], at: 0.01)
-        frame([(1, 0.5, 0.02, 1.9), (2, 0.4, 0.7, 0.8), (3, 0.6, 0.7, 0.8)], at: 0.02)
-        #expect(g.recognizers[key]?.down == 2)
-        // All lifted, then three mid-pad fingertips: still a three-finger gesture.
-        frame([], at: 0.03)
-        frame([(2, 0.4, 0.5, 0.8), (3, 0.6, 0.5, 0.8), (4, 0.5, 0.6, 0.8)], at: 0.04)
+        // A heel resting on the near rim plus three fingers: the recognizer sees three,
+        // so no four-finger swipe can come of it.
+        frame([(1, 0.5, 0.02, 1.9), (2, 0.4, 0.5, 0.8), (3, 0.6, 0.5, 0.8), (4, 0.5, 0.6, 0.8)], at: 0)
+        frame([(1, 0.5, 0.02, 1.9), (2, 0.4, 0.6, 0.8), (3, 0.6, 0.6, 0.8), (4, 0.5, 0.7, 0.8)], at: 0.01)
+        frame([(1, 0.5, 0.02, 1.9), (2, 0.4, 0.7, 0.8), (3, 0.6, 0.7, 0.8), (4, 0.5, 0.8, 0.8)], at: 0.02)
         #expect(g.recognizers[key]?.down == 3)
+        // All lifted, then four mid-pad fingertips: still a four-finger gesture.
+        frame([], at: 0.03)
+        frame([(2, 0.4, 0.5, 0.8), (3, 0.6, 0.5, 0.8), (4, 0.5, 0.6, 0.8), (5, 0.5, 0.4, 0.8)], at: 0.04)
+        #expect(g.recognizers[key]?.down == 4)
     }
 }

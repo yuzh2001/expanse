@@ -800,42 +800,21 @@ final class CanvasController: NSObject {
         if !scrollTap.start() {
             logger.notice("no event tap for ⌃⌥ + scroll (Accessibility not granted?): the app under the pointer gets a gesture's first ticks")
         }
-        // Trackpad gestures: three fingers pan the canvas like a two-finger scroll, four fingers
-        // up toggles it (⌥`), four down goes to the window under the mouse. They only watch
-        // touches — nothing is swallowed — so macOS's own swipes with the same finger count
-        // would fire too, and want turning off in Trackpad settings.
+        // Trackpad gestures: four fingers up toggles the canvas (⌥`), four down goes to the
+        // window under the mouse. They only watch touches — nothing is swallowed — so macOS's
+        // own swipes with the same finger count would fire too, and want turning off in
+        // Trackpad settings.
         gestures.enabled = gesturesEnabled
         gestures.onSwipe = { [weak self] fingers, direction in
             guard let self else { return }
             // A flick's touch can end before macOS has sent a single scroll: arm the tail now,
             // so the momentum it then invents can't scroll what the swipe just did.
             self.swallowScrollTail = true
-            self.diveWork?.cancel()
             switch (fingers, direction) {
             case (4, .up): self.toggle()
             case (4, .down): self.diveUnderMouse()
             default: break
             }
-        }
-        // Three fingers drag the canvas like ⌃⌥ + scroll, from anywhere (over a window too:
-        // at 100% it opens, as a desktop scroll would). The pad's width maps to a view-width
-        // and a bit, and the touch snaps to whole windows when it ends (see scrollEnded).
-        gestures.onPan = { [weak self] d in
-            self?.diveWork?.cancel()
-            guard let self, !self.isPaused else { return }
-            if !self.isActive { self.enter(zoomOut: false) }
-            guard !self.gliding else { return }
-            let b = self.view.bounds
-            self.pan(by: CGVector(dx: d.dx * b.width * 1.4, dy: -d.dy * b.height * 1.4), scrolling: true)
-        }
-        gestures.onPanEnd = { [weak self] in
-            guard let self else { return }
-            self.scrollEnded()
-            // The lift leaves a beat for the window under the mouse: no more panning within
-            // it, the canvas goes to that window — the four-up-then-down flow in one gesture.
-            let work = DispatchWorkItem { [weak self] in self?.diveUnderMouse() }
-            self.diveWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
         }
         if !gestures.start() {
             logger.info("no trackpad for swipe gestures (none found, or MultitouchSupport moved)")
@@ -1980,10 +1959,6 @@ final class CanvasController: NSObject {
         guard !gliding else { return }
         isActive ? exit() : enter(zoomOut: true)
     }
-
-    /// After a pan ends, a beat before going to the window under the mouse (see gestures.onPanEnd):
-    /// a new pan, a swipe, or a scroll before then cancels it.
-    private var diveWork: DispatchWorkItem?
 
     /// Four fingers down on the canvas: go to the window under the mouse, as clicking it does.
     private func diveUnderMouse() {
@@ -5158,7 +5133,6 @@ final class CanvasController: NSObject {
     func pan(by d: CGVector, scrolling: Bool = false) {
         guard isActive else { return }
         cancelAnimation()
-        diveWork?.cancel()
         camera.pan(by: d)
         if scrolling { scrollTravel = CGVector(dx: scrollTravel.dx + d.dx, dy: scrollTravel.dy + d.dy) }
         viewPlaced = abs(camera.scale - 1) < 0.001
