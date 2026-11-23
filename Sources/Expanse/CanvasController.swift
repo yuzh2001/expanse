@@ -127,6 +127,34 @@ final class CanvasController: NSObject {
             gestures.enabled = newValue
         }
     }
+    /// A swipe's fingers are still on the trackpad: their continued moves aren't scrolls or
+    /// pinches (see TrackpadGestures.suppressesScrolls).
+    var suppressesScrolls: Bool { gestures.suppressesScrolls }
+    /// suppressesScrolls, plus just after a swipe fired: a flick's lift tick can land before the
+    /// swipe's async delivery does (see TrackpadGestures.firedWithin).
+    var suppressesGestures: Bool { suppressesScrolls || gestures.firedWithin(0.3) }
+
+    /// A swipe fired, or suppressed scrolls while its fingers were down: the lift tick and the
+    /// momentum macOS makes up after them would still pan the view it opened. Swallow that tail
+    /// until it ends or a real scroll begins. Armed at the swipe too — a fast flick's touch can
+    /// be over before the first scroll event arrives, leaving nothing to have armed it.
+    private var swallowScrollTail = false
+
+    /// Whether a scroll event isn't one: made by a swipe's fingers still down or just fired, or
+    /// the tail they leave after lifting (see suppressesGestures, swallowScrollTail).
+    func shouldSuppressScroll(_ e: NSEvent) -> Bool {
+        if suppressesGestures { swallowScrollTail = true; return true }
+        guard swallowScrollTail else { return false }
+        // A new touch moving, or the tail's own end, disarms it.
+        if e.phase == .began || e.phase == .changed
+            || e.momentumPhase == .ended || e.momentumPhase == .cancelled {
+            swallowScrollTail = false
+            return false
+        }
+        // Left: the suppressed gesture's lift tick and its momentum tail — and a wheel's ticks,
+        // which are never precise and pass through.
+        return e.hasPreciseScrollingDeltas
+    }
     /// Canvas spots of windows that disappeared (minimized, app hidden, closed). Window IDs
     /// are never reused, so a returning ID means the same window coming back.
     private var recentlyRemoved: [CGWindowID: Departed] = [:]
@@ -765,7 +793,7 @@ final class CanvasController: NSObject {
         // the fallback then — it opens the canvas but can't keep a gesture's start from the app.
         scrollTap.enabled = !isPaused
         scrollTap.handler = { [weak self] event in
-            guard let self else { return }
+            guard let self, !self.shouldSuppressScroll(event) else { return }
             if !self.isActive, !self.isPaused, !self.gliding { self.enter(zoomOut: false) }
             self.view.scrollWheel(with: event)
         }
@@ -778,6 +806,9 @@ final class CanvasController: NSObject {
         gestures.enabled = gesturesEnabled
         gestures.onSwipe = { [weak self] fingers, direction in
             guard let self else { return }
+            // A flick's touch can end before macOS has sent a single scroll: arm the tail now,
+            // so the momentum it then invents can't scroll what the swipe just did.
+            self.swallowScrollTail = true
             switch (fingers, direction) {
             case (4, .up): self.toggle()
             case (3, _): self.navigate(direction)
@@ -1867,7 +1898,8 @@ final class CanvasController: NSObject {
 
     /// ⌥ + pinch-in anywhere opens the canvas.
     private func handleGlobalPinch(_ event: NSEvent) {
-        guard !isActive, !isPaused, event.modifierFlags.contains(.option) else { pinchAccumulator = 0; return }
+        guard !isActive, !isPaused, event.modifierFlags.contains(.option), !suppressesGestures
+        else { pinchAccumulator = 0; return }
         if event.phase == .began { pinchAccumulator = 0 }
         pinchAccumulator += event.magnification
         if pinchAccumulator < -0.12 {
@@ -1887,6 +1919,10 @@ final class CanvasController: NSObject {
     /// unless it's a scroll with ⌃⌥ held (see scrollTakesOverAnywhere).
     private func handleDesktopGesture(_ event: NSEvent) {
         guard !isActive, !isPaused, !gliding else { return }
+        // A swipe's fingers still down, or the tail they just left: their arc isn't a scroll
+        // or pinch for the desktop.
+        if event.type == .scrollWheel { guard !shouldSuppressScroll(event) else { return } }
+        else { guard !suppressesGestures else { return } }
         // ⌥ + pinch zooms out from anywhere (see handleGlobalPinch).
         if event.type == .magnify, event.modifierFlags.contains(.option) { return }
         // The start of a gesture (a mouse wheel's ticks have no phases: each counts).

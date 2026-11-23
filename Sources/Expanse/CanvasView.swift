@@ -516,7 +516,7 @@ final class CanvasView: NSView {
     // MARK: Trackpad
 
     override func scrollWheel(with e: NSEvent) {
-        guard !controller.gliding else { return }
+        guard !controller.gliding, !controller.shouldSuppressScroll(e) else { return }
         guard controller.isActive else { controller.enter(zoomOut: false); return }
         if e.modifierFlags.contains(.command) {
             let k: CGFloat = e.hasPreciseScrollingDeltas ? 0.006 : 0.06
@@ -548,7 +548,7 @@ final class CanvasView: NSView {
     }
 
     override func magnify(with e: NSEvent) {
-        guard !controller.gliding else { return }
+        guard !controller.gliding, !controller.suppressesGestures else { return }
         guard controller.isActive else { controller.enter(zoomOut: false); return }
         controller.zoom(by: 1 + e.magnification, at: point(e))
     }

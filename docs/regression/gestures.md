@@ -32,3 +32,16 @@ whole thing off; it's on by default.
 - **Expected:** The swipe does nothing. Frames are dropped whole (a gesture under way is
   forgotten, so turning it back on mid-touch can't fire).
 - **Automate:** unit: `Action.gestures` leaves the panel open; the recognizer gate.
+
+## SWIPE-04 A swipe's fingers finishing their arc aren't scrolls
+- **Type:** Bug
+- **Area:** Gestures
+- **Steps:** Four-finger swipe up to open the canvas, and without lifting, keep the fingers
+  moving a moment before lifting them.
+- **Expected:** Nothing more happens: the same touch's continued movement isn't a scroll —
+  some fingers lifting leaves the rest still not scrolling — so the canvas the swipe just
+  opened doesn't pan, a fast flick's lift and momentum tail don't either, and at 100% a
+  desktop scroll can't open it before the swipe's own toggle.
+- **Automate:** unit: `suppressesScrolls` stays on while the swipe's touch lasts, however few
+  fingers remain, `firedWithin` holds through the gap to the swipe's delivery, and both are
+  off again for a fresh two-finger scroll.

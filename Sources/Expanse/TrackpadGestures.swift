@@ -49,7 +49,25 @@ final class TrackpadGestures {
 
     private let lock = NSLock()
     private var recognizers: [UInt: SwipeRecognizer] = [:]
+    /// When the last swipe fired (same lock): the gap between a recognizer going idle and the
+    /// swipe's async delivery can't let a scroll through either.
+    private var lastFire = Date.distantPast
     private var devices: CFArray?
+
+    /// A trackpad's touch sequence is a swipe's and gestures are on: three or more fingers down
+    /// (the swipe still being made up), or one already decided whose fingers haven't all lifted
+    /// — some may have left, and the rest still aren't scrolling. While it holds, the fingers'
+    /// moves aren't scrolls: they would pan or zoom the canvas the swipe just opened, and at
+    /// 100% a desktop scroll would open it before the swipe could.
+    var suppressesScrolls: Bool {
+        enabled && lock.withLock { recognizers.values.contains { $0.down >= 3 || $0.done } }
+    }
+
+    /// A swipe fired less than `s` seconds ago, and gestures are on: covers the gap between the
+    /// recognizer going idle and the swipe's async delivery, when a flick's lift tick lands.
+    func firedWithin(_ s: TimeInterval) -> Bool {
+        enabled && lock.withLock { Date().timeIntervalSince(lastFire) < s }
+    }
 
     /// Listens on every trackpad there is, the built-in one and Magic Trackpads alike. False when
     /// there's none, or MultitouchSupport isn't available: swipes are just off then.
@@ -106,6 +124,7 @@ final class TrackpadGestures {
         }
         for event in events {
             guard case .swipe(let fingers, let direction) = event else { continue }
+            lock.withLock { lastFire = Date() }
             DispatchQueue.main.async { [weak self] in self?.onSwipe?(fingers, direction) }
         }
     }
@@ -128,6 +147,12 @@ struct SwipeRecognizer {
     /// How many fingers this swipe has, 3 or 4.
     private var fingers = 0
     private var origin = (x: 0.0, y: 0.0)
+    /// Fingers touching in the last frame (any count), so a swipe's owner can ignore the
+    /// scroll events the same fingers keep making (see TrackpadGestures.suppressesScrolls).
+    private(set) var down = 0
+    /// A gesture has been decided (fired, or aborted by a finger leaving) and not all fingers
+    /// have lifted: what they still do isn't a scroll either.
+    var done: Bool { phase == .done }
     /// Frames the finger count has held still for. A swipe can't fire until it settles: real
     /// fingers land a frame or two apart, and a fourth joining late mustn't leave the swipe
     /// latched as a three-finger one (it would hop instead of toggling the canvas).
@@ -142,6 +167,7 @@ struct SwipeRecognizer {
 
     /// One trackpad frame: `count` fingers touching, their center at (`x`, `y`) in 0…1 (y up).
     mutating func frame(count: Int, x: Double, y: Double) -> [Event] {
+        down = count
         switch phase {
         case .idle:
             guard count == 3 || count == 4 else { return [] }

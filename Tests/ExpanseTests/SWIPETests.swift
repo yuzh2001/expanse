@@ -99,4 +99,40 @@ import AppKit
         g.frame(device, touches, 3, 0.2)
         #expect(g.recognizers.isEmpty)
     }
+
+    @Test("SWIPE-04 A swipe's fingers still down suppress its scrolls until they lift")
+    func suppressScrolls() {
+        let g = TrackpadGestures()
+        let device = UnsafeMutableRawPointer.allocate(byteCount: 8, alignment: 8)
+        defer { device.deallocate() }
+        let touches = UnsafeMutableRawPointer.allocate(byteCount: 4 * TrackpadGestures.stride, alignment: 8)
+        defer { touches.deallocate() }
+        func touch(_ n: Int, y: Float, at t: Double) {
+            for i in 0..<n {
+                let f = touches + i * TrackpadGestures.stride
+                f.storeBytes(of: Int32(4), toByteOffset: 20, as: Int32.self)
+                f.storeBytes(of: Float(0.5), toByteOffset: 32, as: Float.self)
+                f.storeBytes(of: y, toByteOffset: 36, as: Float.self)
+            }
+            g.frame(device, touches, n, t)
+        }
+        // A four-finger swipe up, fingers still down after it fires: their moves aren't scrolls.
+        touch(4, y: 0.5, at: 0); touch(4, y: 0.55, at: 0.01); touch(4, y: 0.6, at: 0.02)
+        touch(4, y: 0.7, at: 0.03); touch(4, y: 0.8, at: 0.04)
+        #expect(g.suppressesScrolls)
+        // Two fingers lift and the rest keep moving — still the swipe's touch, still no scroll.
+        touch(2, y: 0.85, at: 0.05); touch(2, y: 0.9, at: 0.06)
+        #expect(g.suppressesScrolls)
+        // All fingers lift: the next touch, two fingers, is a scroll again — though the swipe's
+        // having just fired still counts for the gap to its delivery (see firedWithin).
+        touch(0, y: 0, at: 0.07)
+        #expect(!g.suppressesScrolls)
+        #expect(g.firedWithin(0.3) && !g.firedWithin(0))
+        touch(2, y: 0.5, at: 0.08); touch(2, y: 0.6, at: 0.09)
+        #expect(!g.suppressesScrolls)
+        // Off: nothing is suppressed.
+        g.enabled = false
+        touch(4, y: 0.5, at: 0.10)
+        #expect(!g.suppressesScrolls)
+    }
 }
