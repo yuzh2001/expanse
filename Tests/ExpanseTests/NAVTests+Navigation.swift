@@ -4,6 +4,7 @@ import Carbon.HIToolbox
 @_private(sourceFile: "CanvasController.swift") @testable import Expanse
 @_private(sourceFile: "CanvasView.swift") @testable import Expanse
 @_private(sourceFile: "HotCorner.swift") @testable import Expanse
+@_private(sourceFile: "ScrollTap.swift") @testable import Expanse
 @_private(sourceFile: "AppDelegate.swift") @testable import Expanse
 
 /// NAV cases about getting from window to window: arrow keys and hops, focus and auto-centre,
@@ -570,5 +571,20 @@ extension NAVTests {
         #expect(!CanvasController.scrollTakesOverAnywhere([]))
         // ⌘ as well: not this.
         #expect(!CanvasController.scrollTakesOverAnywhere([.command, .control, .option]))
+
+        // The event tap's per-gesture latch (ScrollTap.takes): the app under the pointer gets
+        // none of a gesture taken at its start, ⌃⌥ held or not, momentum included — until a new
+        // gesture starts.
+        let ctrlOpt: CGEventFlags = [.maskControl, .maskAlternate]
+        // CGScrollPhase: mayBegin 128, began 1, changed 2, ended 4; momentum: continue 2.
+        #expect(ScrollTap.takes(scrollPhase: 1, momentumPhase: 0, flags: ctrlOpt, taking: false))
+        #expect(ScrollTap.takes(scrollPhase: 128, momentumPhase: 0, flags: ctrlOpt, taking: false))
+        #expect(ScrollTap.takes(scrollPhase: 2, momentumPhase: 0, flags: [], taking: true))
+        #expect(ScrollTap.takes(scrollPhase: 0, momentumPhase: 2, flags: [], taking: true))
+        #expect(!ScrollTap.takes(scrollPhase: 1, momentumPhase: 0, flags: [], taking: true))
+        // A mouse wheel's ticks have no phases: each is a start of its own.
+        #expect(ScrollTap.takes(scrollPhase: 0, momentumPhase: 0, flags: ctrlOpt, taking: false))
+        #expect(!ScrollTap.takes(scrollPhase: 0, momentumPhase: 0, flags: [], taking: false))
+        #expect(!ScrollTap.takes(scrollPhase: 1, momentumPhase: 0, flags: ctrlOpt.union(.maskCommand), taking: false))
     }
 }
