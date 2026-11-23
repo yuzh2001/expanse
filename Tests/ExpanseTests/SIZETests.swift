@@ -100,7 +100,7 @@ import AppKit
         Env.isolate()
         let entry = SavedLayout.Window(bundleID: "com.apple.TextEdit", appName: "TextEdit", title: "", x: 100, y: 50,
                                        w: 1100, h: 800, hx: 100, hy: 50, pw: 1100, ph: 800,
-                                       ox: 40, oy: 60, ow: 600, oh: 400, id: 7, pid: 123, away: nil)
+                                       ox: 40, oy: 60, ow: 600, oh: 400, id: 7, pid: 123, row: nil, away: nil)
         LayoutStore.save(SavedLayout.with([entry]))
         let loaded = LayoutStore.load()?.windows.first
         #expect(loaded?.w == 1100 && loaded?.h == 800, "the canvas size to restore at launch")

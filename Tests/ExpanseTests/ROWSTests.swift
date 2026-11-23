@@ -1,11 +1,15 @@
 import Testing
-import CoreGraphics
+import AppKit
+import ScreenCaptureKit
 @_private(sourceFile: "RowLayout.swift") @testable import Expanse
+@_private(sourceFile: "CanvasController.swift") @testable import Expanse
+@_private(sourceFile: "ManagedWindow.swift") @testable import Expanse
+@_private(sourceFile: "LayoutStore.swift") @testable import Expanse
 
 /// docs/regression/rows.md. The Rows layout engine, pure functions over canvas frames — no
 /// controller, no screen. The metrics below: 400pt rows with the 20pt gap, the grid a 60pt gap
 /// to the rows' right wrapping past 500pt.
-@Suite("ROWS: Rows layout", .serialized) struct ROWSTests {
+@MainActor @Suite("ROWS: Rows layout", .serialized) struct ROWSTests {
 
     // MARK: Helpers
 
@@ -188,5 +192,193 @@ import CoreGraphics
         laid = RowLayout.collapseAll(items, Self.m)
         #expect(Self.frame(laid, 2) == Self.r(320, 0, 300, 400))
         #expect(Self.frame(laid, 3) == Self.r(640, 0, 300, 400))
+    }
+
+    // MARK: Wired into the canvas (fake windows, no real ones move)
+
+    /// A window on the canvas where Expanse last put it, so a scan doesn't follow anything.
+    private static func placed(_ id: CGWindowID, canvas: CGRect, pid: pid_t = Fake.firstPID) -> ManagedWindow {
+        let real = canvas.offsetBy(dx: 0, dy: TestDisplay.laptop.menuBar)
+        let w = Fake.window(id: id, pid: pid, canvas: canvas, real: real)
+        w.lastPlaced = real.origin
+        return w
+    }
+
+    /// One window scan, as PLACETests does it: `standard` the new windows Accessibility calls
+    /// standard document windows.
+    private static func scan(_ c: CanvasController, _ scWindows: [SCWindow], standard: [CGWindowID] = []) {
+        var ax = CanvasController.AXSnapshot()
+        for id in standard {
+            ax.standard.insert(id)
+            ax.known.insert(id)
+            c.windowKinds[id] = CanvasController.WindowKind(standard: true, at: CACurrentMediaTime())
+        }
+        c.apply(scWindows, ax: ax, stale: false)
+    }
+
+    private static func window(_ c: CanvasController, _ id: CGWindowID) -> ManagedWindow? {
+        c.windows.first { $0.id == id }
+    }
+
+    /// A laptop with a 60pt Dock at the bottom: the work area is 889pt, a row's height 857pt,
+    /// the second row's top 877pt.
+    private static let docked = TestDisplay(dockBottom: 60)
+
+    /// Leaves the canvas inert and Rows mode off, so nothing leaks into another test.
+    private static func finish(_ c: CanvasController) {
+        [c.saveWork, c.syncSoonWork, c.recheckWork].forEach { $0?.cancel() }
+        c.cancelAnimation()
+        c.snapshotTimer?.invalidate()
+        c.isPaused = true
+        UserDefaults.standard.removeObject(forKey: CanvasController.rowsModeKey)
+    }
+
+    // MARK: ROWS-08
+
+    @Test("ROWS-08 Turning Arrange in rows on lays bands out as rows at the work area's height")
+    func rows08() {
+        defer { UserDefaults.standard.removeObject(forKey: CanvasController.rowsModeKey) }
+        let c = TestCanvas.make(display: Self.docked, windows: [
+            Self.placed(1, canvas: Self.r(0, 100, 600, 400)),
+            Self.placed(2, canvas: Self.r(700, 110, 600, 390)),
+            Self.placed(3, canvas: Self.r(1400, 100, 600, 400)),
+            Self.placed(4, canvas: Self.r(0, 600, 600, 400)),
+            Self.placed(5, canvas: Self.r(700, 600, 600, 400)),
+            Self.placed(6, canvas: Self.r(400, 1400, 600, 400)),
+        ])
+        defer { Self.finish(c) }
+        #expect(c.workArea.height == 889)
+        c.rowsMode = true
+        // Two bands of aligned windows become rows 0 and 1, sized to the work area's height.
+        for w in c.windows where [1, 2, 3].contains(w.id) {
+            #expect(w.row == 0 && w.canvasFrame.minY == 0 && w.canvasFrame.height == 857, "\(w.id)")
+        }
+        #expect(c.windows[0].canvasFrame.origin == .zero && c.windows[1].canvasFrame.origin == CGPoint(x: 700, y: 0))
+        #expect(Self.window(c, 4)!.row == 1 && Self.window(c, 4)!.canvasFrame == Self.r(0, 877, 600, 857))
+        // The stray joins the grid: its own size, packed right of the rows' end (2000 + 200).
+        let stray = Self.window(c, 6)!
+        #expect(stray.row == nil && stray.canvasFrame == Self.r(2200, 0, 600, 400))
+    }
+
+    // MARK: ROWS-09
+
+    @Test("ROWS-09 A new window opens in the grid, beside the rows")
+    func rows09() {
+        defer { UserDefaults.standard.removeObject(forKey: CanvasController.rowsModeKey) }
+        let a = Self.placed(1, canvas: Self.r(0, 100, 600, 400))
+        let b = Self.placed(2, canvas: Self.r(700, 100, 600, 400))
+        let c = TestCanvas.make(display: Self.docked, windows: [a, b])
+        defer { Self.finish(c) }
+        c.firstSync = false
+        c.snapshotTimer = Timer(timeInterval: 3600, repeats: false) { _ in }
+        c.rowsMode = true
+        // A window opens where its app put it (below the rows, say): the grid takes it.
+        let n = Fake.scWindow(id: 3, pid: Fake.firstPID, bundleID: "com.example.app", appName: "Example",
+                              frame: CGRect(x: 300, y: 200, width: 500, height: 300))
+        Self.scan(c, [a.scWindow, b.scWindow, n], standard: [3])
+        let w = Self.window(c, 3)!
+        #expect(w.row == nil)
+        // Right of the rows' end (1300) plus the grid gap (200), at its own size.
+        #expect(w.canvasFrame == Self.r(1500, 0, 500, 300))
+    }
+
+    // MARK: ROWS-10
+
+    @Test("ROWS-10 A canvas drop lands in the row its middle's in, or back in the grid")
+    func rows10() {
+        defer { UserDefaults.standard.removeObject(forKey: CanvasController.rowsModeKey) }
+        let c = TestCanvas.make(display: Self.docked, windows: [
+            Self.placed(1, canvas: Self.r(0, 0, 600, 857)),
+            Self.placed(2, canvas: Self.r(620, 0, 600, 857)),
+            Self.placed(3, canvas: Self.r(0, 877, 600, 857)),
+            Self.placed(4, canvas: Self.r(620, 877, 600, 857)),
+        ])
+        defer { Self.finish(c) }
+        c.rowsMode = true
+        // 1 let go with its middle in row 1, over 3's right end: after 3, and 4 shoved right.
+        c.rowsDrop(Self.window(c, 1)!, at: Self.r(150, 900, 600, 857))
+        #expect(Self.window(c, 1)!.row == 1 && Self.window(c, 1)!.canvasFrame == Self.r(620, 877, 600, 857))
+        #expect(Self.window(c, 4)!.canvasFrame == Self.r(1240, 877, 600, 857))
+        // 3 let go right of the rows (they end at 1840, the grid starts at 2040): the grid.
+        c.rowsDrop(Self.window(c, 3)!, at: Self.r(2100, 0, 600, 857))
+        #expect(Self.window(c, 3)!.row == nil && Self.window(c, 3)!.canvasFrame == Self.r(2040, 0, 600, 857))
+    }
+
+    // MARK: ROWS-11
+
+    @Test("ROWS-11 A display change re-lays the rows at the new work area's height, keeping x")
+    func rows11() {
+        defer { UserDefaults.standard.removeObject(forKey: CanvasController.rowsModeKey) }
+        let c = TestCanvas.make(display: Self.docked, windows: [
+            Self.placed(1, canvas: Self.r(0, 0, 600, 857)),
+            Self.placed(2, canvas: Self.r(620, 0, 600, 857)),
+        ])
+        defer { Self.finish(c) }
+        c.rowsMode = true
+        // To the plain laptop: the work area is 949pt, so the row's height becomes 917.
+        c.displayOverride = (TestDisplay.laptop.frame, TestDisplay.laptop.usable)
+        c.updateOverlayFrame()
+        c.refit(tidy: false, rederiving: [])
+        #expect(Self.window(c, 1)!.canvasFrame == Self.r(0, 0, 600, 917))
+        #expect(Self.window(c, 2)!.canvasFrame == Self.r(620, 0, 600, 917))
+    }
+
+    // MARK: ROWS-12
+
+    @Test("ROWS-12 A window's row survives a layout save and load")
+    func rows12() throws {
+        defer { UserDefaults.standard.removeObject(forKey: CanvasController.rowsModeKey) }
+        let w = Self.placed(1, canvas: Self.r(0, 0, 600, 857))
+        w.row = 1
+        let c = TestCanvas.make(display: Self.docked, windows: [w])
+        defer { Self.finish(c) }
+        let e = c.savedEntry(w)
+        #expect(e.row == 1)
+        // Through the file and back: the spot a window takes comes with its row.
+        LayoutStore.save(SavedLayout.with([e]))
+        let loaded = try #require(LayoutStore.load()?.windows.first)
+        #expect(loaded.row == 1)
+        let back = Fake.window(id: 1, canvas: .zero)
+        c.takeSpot(back, loaded, actual: CGRect(x: 100, y: 33, width: 600, height: 857))
+        #expect(back.row == 1)
+        // And a layout saved before rows: no row.
+        let old = try JSONDecoder().decode(SavedLayout.Window.self,
+                                           from: #"{"bundleID":"b","appName":"a","title":"t","x":0,"y":0}"#.data(using: .utf8)!)
+        #expect(old.row == nil)
+    }
+
+    // MARK: ROWS-13
+
+    @Test("ROWS-13 Dragging on the canvas snaps sideways only")
+    func rows13() {
+        let a = Fake.window(id: 1, canvas: Self.r(0, 0, 600, 400))
+        let c = TestCanvas.make(windows: [a])
+        defer { Self.finish(c) }
+        // In Rows mode the row a drop lands in is the drag's middle: x snaps, y stays free.
+        let (f, _) = c.snap(Self.r(627, 300, 400, 300), excluding: [2], yToo: false)
+        #expect(f == Self.r(620, 300, 400, 300))
+        let (top, lines) = c.snap(Self.r(620, 6, 400, 300), excluding: [2], yToo: false)
+        #expect(top.minY == 6, "no top-edge snap, but it still snaps sideways")
+        #expect(lines.isEmpty)
+    }
+
+    // MARK: ROWS-14
+
+    @Test("ROWS-14 With Arrange in rows off, nothing about the free layout changes")
+    func rows14() {
+        defer { UserDefaults.standard.removeObject(forKey: CanvasController.rowsModeKey) }
+        let a = Fake.window(id: 1, canvas: Self.r(0, 0, 600, 400))
+        let c = TestCanvas.make(windows: [a])
+        defer { Self.finish(c) }
+        #expect(!c.rowsMode)
+        // A canvas drop just notes the move, as ever (see rowsDrop's guard).
+        let w = Self.window(c, 1)!
+        c.rowsDrop(w, at: Self.r(50, 60, 600, 400))
+        #expect(w.canvasFrame == Self.r(0, 0, 600, 400) && w.row == nil)
+        c.applyRows()
+        #expect(w.canvasFrame == Self.r(0, 0, 600, 400))
+        // And snapping still works in both directions.
+        let (f, _) = c.snap(Self.r(627, 6, 400, 300), excluding: [2])
+        #expect(f.minY == 0 && f.minX == 620)
     }
 }

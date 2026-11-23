@@ -133,7 +133,7 @@ final class CanvasController: NSObject {
     /// a window of the same app has just gone is that app's next tab, not a new window.
     /// `real`: the new window's frame on screen.
     private func tabTakingOver(from w: ManagedWindow, at real: CGRect) -> (id: CGWindowID, canvasFrame: CGRect, originalFrame: CGRect,
-                                                                         preferredSize: CGSize, home: CGPoint?, lastPlaced: CGPoint?, parked: Bool)? {
+                                                                         preferredSize: CGSize, home: CGPoint?, lastPlaced: CGPoint?, parked: Bool, row: Int?)? {
         func near(_ a: CGPoint, _ b: CGPoint) -> Bool { abs(a.x - b.x) <= 2 && abs(a.y - b.y) <= 2 }
         // The same size, or taller or shorter by a tab bar: one comes with a window's first new tab
         // and goes with its last. Terminal keeps its rows, so its window grows by the bar, upwards.
@@ -155,23 +155,23 @@ final class CanvasController: NSObject {
         // Its spot, chosen size, home and macOS frame take the window's new height (the tab bar
         // came or went), keeping the edge the app kept: otherwise its size goes back, squashing it.
         func taking(_ id: CGWindowID, _ canvas: CGRect, _ original: CGRect, _ preferred: CGSize, _ home: CGPoint?,
-                    _ placed: CGPoint?, _ parked: Bool, rise r: CGFloat)
-            -> (id: CGWindowID, canvasFrame: CGRect, originalFrame: CGRect, preferredSize: CGSize, home: CGPoint?, lastPlaced: CGPoint?, parked: Bool) {
+                    _ placed: CGPoint?, _ parked: Bool, _ row: Int?, rise r: CGFloat)
+            -> (id: CGWindowID, canvasFrame: CGRect, originalFrame: CGRect, preferredSize: CGSize, home: CGPoint?, lastPlaced: CGPoint?, parked: Bool, row: Int?) {
             let dh = real.height - canvas.height
-            guard abs(dh) > 2 else { return (id, canvas, original, preferred, home, placed, parked) }
+            guard abs(dh) > 2 else { return (id, canvas, original, preferred, home, placed, parked, row) }
             func up(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x, y: p.y - r) }
             return (id, CGRect(origin: up(canvas.origin), size: CGSize(width: canvas.width, height: real.height)),
                     CGRect(origin: up(original.origin), size: CGSize(width: original.width, height: original.height + dh)),
-                    CGSize(width: preferred.width, height: preferred.height + dh), home.map(up), placed.map(up), parked)
+                    CGSize(width: preferred.width, height: preferred.height + dh), home.map(up), placed.map(up), parked, row)
         }
         for tab in windows where tab.pid == w.pid && tab.id != w.id && !scannedIDs.contains(tab.id) {
             guard let r = rise(canvas: tab.canvasFrame, placed: tab.lastPlaced, parked: tab.parked) else { continue }
-            return taking(tab.id, tab.canvasFrame, tab.originalFrame, tab.preferredSize, tab.home, tab.lastPlaced, tab.parked, rise: r)
+            return taking(tab.id, tab.canvasFrame, tab.originalFrame, tab.preferredSize, tab.home, tab.lastPlaced, tab.parked, tab.row, rise: r)
         }
         // Gone a moment before (the scan that saw it go came first).
         for (id, tab) in recentlyRemoved where id != w.id && tab.pid == w.pid && Date().timeIntervalSince(tab.at) < 2 {
             guard let r = rise(canvas: tab.canvasFrame, placed: nil, parked: tab.parked) else { continue }
-            return taking(id, tab.canvasFrame, tab.originalFrame, tab.preferredSize, tab.home, nil, tab.parked, rise: r)
+            return taking(id, tab.canvasFrame, tab.originalFrame, tab.preferredSize, tab.home, nil, tab.parked, tab.row, rise: r)
         }
         return nil
     }
@@ -188,6 +188,8 @@ final class CanvasController: NSObject {
         let preferredSize: CGSize
         let home: CGPoint?
         let parked: Bool
+        /// Its row, in Rows mode (see ManagedWindow.row).
+        var row: Int? = nil
         let at: Date
         /// Closed, not just out of view (see closedWindows): its spot is only for a tab taking
         /// over (see tabTakingOver), and a window that turns up with its ID is a new one (Finder
@@ -549,7 +551,7 @@ final class CanvasController: NSObject {
         } else if final {
             // Zoomed out, the layout still fits the new screen (the real windows follow on the way
             // out), but there's no window to centre.
-            fitLayoutToScreen(tidy: false, rederiving: [])
+            refit(tidy: false, rederiving: [])
             screenResized = false
             centreAfterResize = nil
         }
@@ -600,7 +602,7 @@ final class CanvasController: NSObject {
     private func fitToNewScreen() {
         // Same as Tidy Up: sizes back to what you chose (capped at this screen), overlaps pushed
         // apart, clusters pulled back to the standard gap.
-        fitLayoutToScreen(tidy: false, rederiving: [])
+        refit(tidy: false, rederiving: [])
         // The screen changed size: the window you were in goes in the middle. Fitting moves windows
         // (the layout tightens on a smaller screen), so the old middle can be somewhere else now.
         if screenResized, let w = centreAfterResize ?? currentWindow(), windows.contains(where: { $0 === w }) {
@@ -1492,7 +1494,12 @@ final class CanvasController: NSObject {
                 w.parked = false
                 let before = w.canvasFrame.origin
                 w.canvasFrame.origin = canvasPoint(forGlobal: pos)
-                noteUserMove(w, from: before)
+                if rowsMode {
+                    // The row settles once the drag ends, landing the window where you let go.
+                    rowConformSoon(w.id)
+                } else {
+                    noteUserMove(w, from: before)
+                }
             }
         }
         view.render()
@@ -1647,7 +1654,7 @@ final class CanvasController: NSObject {
                            pw: Double(w.preferredSize.width), ph: Double(w.preferredSize.height),
                            ox: Double(w.originalFrame.minX), oy: Double(w.originalFrame.minY),
                            ow: Double(w.originalFrame.width), oh: Double(w.originalFrame.height),
-                           id: w.id, pid: w.pid)
+                           id: w.id, pid: w.pid, row: w.row)
     }
 
     /// A window gone from screen, as a saved layout keeps it.
@@ -1660,7 +1667,7 @@ final class CanvasController: NSObject {
                            pw: Double(gone.preferredSize.width), ph: Double(gone.preferredSize.height),
                            ox: Double(gone.originalFrame.minX), oy: Double(gone.originalFrame.minY),
                            ow: Double(gone.originalFrame.width), oh: Double(gone.originalFrame.height),
-                           id: id, pid: gone.pid, away: true)
+                           id: id, pid: gone.pid, row: gone.row, away: true)
     }
 
     /// An app quit. Its windows' spots go with them: opened again later, its windows are new
@@ -1803,12 +1810,13 @@ final class CanvasController: NSObject {
             w.canvasFrame.origin = sameScreen ? CGPoint(x: e.x, y: e.y) : w.home ?? w.canvasFrame.origin
             w.fitPush = .zero
             if let pw = e.pw ?? e.w, let ph = e.ph ?? e.h, pw > 0 { w.preferredSize = CGSize(width: pw, height: ph) }
+            w.row = e.row
             restored += 1
         }
         if sameScreen { fittedAreaSize = workArea.size }
         // The snapshot's home spots as they are: re-homing works them out from where windows
         // are now, which is what the restore is replacing.
-        fitLayoutToScreen(tidy: false, rederiving: sameScreen ? [] : nil, rehoming: false)
+        refit(tidy: false, rederiving: sameScreen ? [] : nil, rehoming: false)
         logger.info("restored a layout: \(restored) of \(self.windows.count) windows")
         view.render()
         animate(to: fitCamera())
@@ -2475,6 +2483,7 @@ final class CanvasController: NSObject {
                             w.parked = false
                             w.lastPlaced = nil
                             w.canvasFrame.origin = canvasPoint(forGlobal: f.origin)
+                            if rowsMode { rowConformSoon(w.id) }
                         }
                     } else {
                         let before = w.canvasFrame.origin
@@ -2494,6 +2503,7 @@ final class CanvasController: NSObject {
                         if before.distance(to: w.canvasFrame.origin) > 2 {
                             logger.info("follow \(w.appName, privacy: .public)[\(w.id)] found at \(NSStringFromPoint(f.origin), privacy: .public) (never placed)")
                             w.noteFollowed(from: before)
+                            if rowsMode { rowConformSoon(w.id) }
                         }
                     }
                 }
@@ -2544,7 +2554,7 @@ final class CanvasController: NSObject {
         // screen it was saved on, a laptop's say: fit the layout to this one before anything moves.
         // Only those: the windows already here stay where you see them.
         let restoredAny = !restored.isEmpty
-        if restoredAny { fitLayoutToScreen(tidy: false, rederiving: firstSync ? [] : restored) }
+        if restoredAny { refit(tidy: false, rederiving: firstSync ? [] : restored) }
         // At launch, windows the saved layout has no spot for (opened since, or closed before a
         // restart and opened again at login) go beside what's in view, as a window opened later
         // would: not where macOS put them, on top of the layout coming back.
@@ -2594,6 +2604,7 @@ final class CanvasController: NSObject {
         w.canvasFrame.origin = CGPoint(x: match.x, y: match.y)
         if let pw = match.pw, let ph = match.ph { w.preferredSize = CGSize(width: pw, height: ph) }
         if let hx = match.hx, let hy = match.hy { w.home = CGPoint(x: hx, y: hy) }
+        w.row = match.row
         if let sw = match.w, let sh = match.h, let ax = w.ax, !w.sizesItself,
            abs(sw - f.width) > 1 || abs(sh - f.height) > 1 {
             let actual = resizeReal(w, ax, to: CGSize(width: sw, height: sh))
@@ -2661,6 +2672,7 @@ final class CanvasController: NSObject {
             w.home = tab.home
             w.lastPlaced = tab.lastPlaced
             w.parked = tab.parked
+            w.row = tab.row
             returning = true
             logger.info("tab \(w.appName, privacy: .public)[\(w.id)] takes over from [\(tab.id)]\(abs(bar) > 2 ? ", \(Int(bar))pt taller (the tab bar)" : "", privacy: .public)")
         } else if let back = recentlyRemoved.removeValue(forKey: w.id) {
@@ -2670,6 +2682,7 @@ final class CanvasController: NSObject {
             w.originalFrame = back.originalFrame
             w.preferredSize = back.preferredSize
             w.home = back.home
+            w.row = back.row
         } else if let match = takeRestartSpot(for: w, size: f.size) {
             // Its app restarted itself, and this is its window back, however long it took to show
             // (see restartSpots): at its spot, with the macOS frame it had before Expanse.
@@ -2981,6 +2994,128 @@ final class CanvasController: NSObject {
         }
     }
 
+    // MARK: Rows
+
+    /// "Arrange in rows" (the menu bar panel's switches): rows of same-height windows, x free
+    /// within a row, plus an unsorted grid of the rest to their right (see RowLayout). Turning it
+    /// on lays everything out by the bands the windows already form; turning it off leaves them
+    /// where they are.
+    var rowsMode: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.rowsModeKey) }
+        set {
+            guard newValue != UserDefaults.standard.bool(forKey: Self.rowsModeKey) else { return }
+            UserDefaults.standard.set(newValue, forKey: Self.rowsModeKey)
+            guard newValue, !windows.isEmpty else { return }
+            applyRows(RowLayout.distribute(windows.map { (id: $0.id, frame: $0.canvasFrame, fixedHeight: $0.sizesItself) },
+                                           rowMetrics), animated: isActive)
+        }
+    }
+    static let rowsModeKey = "arrangeInRows"
+
+    /// What the Rows engine works in on this screen: rows the work area's height less the margins
+    /// all round, the standard gap between neighbours, the grid a big step right of the rows'
+    /// right end, its shelves wrapping at two work areas wide.
+    private var rowMetrics: RowLayout.Metrics {
+        RowLayout.Metrics(windowHeight: workArea.height - 2 * Self.screenMargin,
+                          gap: Self.gap, top: 0, gridGap: 200, gridMaxWidth: 2 * workArea.width)
+    }
+
+    /// Every window as the engine sees it (see RowLayout.Item).
+    private func rowItems() -> [RowLayout.Item] {
+        windows.map { RowLayout.Item(id: $0.id, frame: $0.canvasFrame, row: $0.row, fixedHeight: $0.sizesItself) }
+    }
+
+    /// Rows mode: lay `windows` out — `items` already laid out (a drop, the switch's distribute,
+    /// Tidy's collapseAll), or RowLayout.layout of where they are — and write spots and rows back.
+    /// A row's window gets the row's height, its width capped at the work area's; a grid window,
+    /// or one its app sizes, keeps its own size. Home is where a window is (no derive in Rows
+    /// mode). `animated`: zoomed out, also glide the view out to show the whole result.
+    func applyRows(_ items: [RowLayout.Item]? = nil, animated: Bool = false) {
+        guard rowsMode else { return }
+        let m = rowMetrics
+        let maxWidth = max(100, workArea.width - 2 * Self.screenMargin)
+        for item in items ?? RowLayout.layout(rowItems(), m) {
+            guard let w = windows.first(where: { $0.id == item.id }) else { continue }
+            w.row = item.row
+            let target = w.row != nil && !w.sizesItself
+                ? CGSize(width: min(item.frame.width, maxWidth), height: item.frame.height)
+                : item.frame.size
+            if !w.sizesItself, let ax = w.ax, target != w.canvasFrame.size {
+                let actual = resizeReal(w, ax, to: target)
+                w.canvasFrame.size = actual
+                updateCapture(w)
+            } else {
+                w.canvasFrame.size = target
+            }
+            w.canvasFrame.origin = item.frame.origin
+            w.home = w.canvasFrame.origin
+            w.fitPush = .zero
+        }
+        view.render()
+        // Live mode: the real windows go to the laid-out spots; zoomed out they follow on exit.
+        if !isActive { commitInBackground() }
+        if animated, isActive { animate(to: fitCamera()) }
+        scheduleSave()
+    }
+
+    /// A canvas drag let go in Rows mode: lands the window in the row its middle is in — new rows
+    /// open past the ends — or back in the grid right of the rows, and everything settles (see
+    /// RowLayout.drop).
+    func rowsDrop(_ w: ManagedWindow, at frame: CGRect) {
+        guard rowsMode else { return }
+        applyRows(RowLayout.drop(w.id, at: frame, into: rowItems(), rowMetrics))
+    }
+
+    /// fitLayoutToScreen, or in Rows mode the engine's pass: rows renumbered and re-aligned at this
+    /// screen's row height, x kept (Tidy also closes every gap, see RowLayout.collapseAll).
+    private func refit(tidy: Bool, rederiving: Set<CGWindowID>? = nil, rehoming: Bool = true) {
+        if rowsMode {
+            applyRows(tidy ? RowLayout.collapseAll(rowItems(), rowMetrics) : nil)
+        } else {
+            fitLayoutToScreen(tidy: tidy, rederiving: rederiving, rehoming: rehoming)
+        }
+    }
+
+    /// Windows whose real frame you changed in Rows mode, waiting for the row to settle (see
+    /// conformRows).
+    private var pendingRowConform = Set<CGWindowID>()
+    private var rowConformWork: DispatchWorkItem?
+
+    /// A real-window move or resize Expanse followed, in Rows mode: the row settles a quarter of a
+    /// second after the last change — a drag still under way means wait longer.
+    private func rowConformSoon(_ id: CGWindowID) {
+        pendingRowConform.insert(id)
+        rowConformWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.rowConformWork = nil
+            self?.conformRows()
+        }
+        rowConformWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+    }
+
+    private func conformRows() {
+        guard rowsMode else { pendingRowConform.removeAll(); return }
+        if buttonHeld() {
+            // Still dragging: look again shortly (rowConformSoon without a new window).
+            rowConformWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                self?.rowConformWork = nil
+                self?.conformRows()
+            }
+            rowConformWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+            return
+        }
+        let ids = pendingRowConform
+        pendingRowConform.removeAll()
+        var items = rowItems()
+        for id in ids where windows.contains(where: { $0.id == id }) {
+            items = RowLayout.drop(id, at: windows.first { $0.id == id }!.canvasFrame, into: items, rowMetrics)
+        }
+        applyRows(items)
+    }
+
     // MARK: Tidy up
 
     /// The gap between neighbouring windows: edge snapping, new-window placement, Tidy Up, and the
@@ -3020,7 +3155,7 @@ final class CanvasController: NSObject {
         // Home spots are otherwise brought up to date when the layout is saved, which windows
         // you've only just moved may still be waiting for: Tidy would put them back.
         homeFromCanvas()
-        fitLayoutToScreen(tidy: true)
+        refit(tidy: true)
         view.render()
         animate(to: fitCamera())
         scheduleSave()
@@ -3702,7 +3837,7 @@ final class CanvasController: NSObject {
 
     /// How every window was before a screen or size change, for ⌘Z (see undo).
     private struct UndoStep {
-        struct State { let id: CGWindowID, frame: CGRect, preferred: CGSize, home: CGPoint?, fitPush: CGVector }
+        struct State { let id: CGWindowID, frame: CGRect, preferred: CGSize, home: CGPoint?, fitPush: CGVector, row: Int? }
         let name: String
         let states: [State]
     }
@@ -3710,7 +3845,8 @@ final class CanvasController: NSObject {
 
     private func recordUndo(_ name: String) {
         undoSteps.append(UndoStep(name: name, states: windows.map {
-            UndoStep.State(id: $0.id, frame: $0.canvasFrame, preferred: $0.preferredSize, home: $0.home, fitPush: $0.fitPush)
+            UndoStep.State(id: $0.id, frame: $0.canvasFrame, preferred: $0.preferredSize, home: $0.home, fitPush: $0.fitPush,
+                           row: $0.row)
         }))
         if undoSteps.count > 20 { undoSteps.removeFirst() }
     }
@@ -3729,6 +3865,7 @@ final class CanvasController: NSObject {
             w.preferredSize = s.preferred
             w.home = s.home
             w.fitPush = s.fitPush
+            w.row = s.row
             if resized { updateCapture(w) }
         }
         logger.info("undo: \(step.name, privacy: .public)")
@@ -3747,6 +3884,11 @@ final class CanvasController: NSObject {
             return
         } else if returning {
             // add() already put it back at its old spot.
+        } else if rowsMode, windowKinds[w.id]?.standard ?? (AX.subrole(w.ax) == kAXStandardWindowSubrole as String) {
+            // Rows mode: a new window goes to the unsorted grid, which packs it right of the rows.
+            w.row = nil
+            applyRows()
+            logger.info("placed new window \(w.appName, privacy: .public) in the grid")
         } else if windowKinds[w.id]?.standard ?? (AX.subrole(w.ax) == kAXStandardWindowSubrole as String),
                   let spot = freeSpot(for: w, near: anchor, onScreenOnly: !autoCentre) {
             w.canvasFrame.origin = spot
@@ -3785,6 +3927,13 @@ final class CanvasController: NSObject {
     /// them doesn't take up the spots.
     private func placeUnrecognised(_ strangers: [ManagedWindow]) {
         guard !strangers.isEmpty else { return }
+        if rowsMode {
+            // Rows mode: windows the saved layout doesn't know go to the grid like new ones.
+            for w in strangers { w.row = nil }
+            applyRows()
+            logger.info("placed \(strangers.count) unrecognised windows in the grid")
+            return
+        }
         let visible = camera.toCanvas(CGRect(origin: .zero, size: viewSize))
         func shown(_ w: ManagedWindow) -> CGFloat {
             let r = w.canvasFrame.intersection(visible)
@@ -3878,7 +4027,7 @@ final class CanvasController: NSObject {
             }
             recentlyRemoved[w.id] = Departed(pid: w.pid, bundleID: w.bundleID, appName: w.appName, title: w.title,
                                              canvasFrame: frame, originalFrame: w.originalFrame,
-                                             preferredSize: w.preferredSize, home: w.home, parked: w.parked, at: Date(),
+                                             preferredSize: w.preferredSize, home: w.home, parked: w.parked, row: w.row, at: Date(),
                                              closed: closedWindows.remove(w.id) != nil)
             // Closed windows never come back: theirs are kept a moment, for a tab taking over.
             let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600), momentAgo = Date().addingTimeInterval(-10)
@@ -3888,6 +4037,8 @@ final class CanvasController: NSObject {
             }
         }
         if view.hovered === w { view.hovered = nil }
+        // Rows mode: the grid packs tighter; rows keep their x (see RowLayout.layout).
+        if rowsMode { applyRows() }
         if isActive { view.render() }
     }
 
@@ -4815,6 +4966,10 @@ final class CanvasController: NSObject {
             w.lastSized = nil
         }
         updateCapture(w)
+        if rowsMode, fromUser || w.sizesItself {
+            // A size you (or its sizing app) changed in Rows mode: the row settles shortly.
+            rowConformSoon(w.id)
+        }
     }
 
     /// Going to `w`: its screen group framed (centred at 100%; it fits), or the window centred on
@@ -5109,7 +5264,9 @@ final class CanvasController: NSObject {
     /// Edges and the standard gap snap firmly; centres snap softly (half the reach, and they lose
     /// ties) so they guide without fighting. A frame above or below a row of windows can also
     /// centre on the whole row. Returns guide lines in canvas space.
-    func snap(_ f: CGRect, excluding: Set<CGWindowID>) -> (CGRect, [(CGPoint, CGPoint)]) {
+    /// `yToo`: false in Rows mode, where the row a drop lands in is the drag's middle and y only
+    /// follows the pointer.
+    func snap(_ f: CGRect, excluding: Set<CGWindowID>, yToo: Bool = true) -> (CGRect, [(CGPoint, CGPoint)]) {
         let firm = 10 / camera.scale
         let soft = firm / 2
         let gap = Self.gap
@@ -5130,16 +5287,18 @@ final class CanvasController: NSObject {
             consider(f.midX, r.midX, centre: true, line: r.midX, into: &bestX)
             consider(f.minX, r.maxX + gap, line: nil, into: &bestX)
             consider(f.maxX, r.minX - gap, line: nil, into: &bestX)
-            for a in [f.minY, f.maxY] { for b in [r.minY, r.maxY] { consider(a, b, line: b, into: &bestY) } }
-            consider(f.midY, r.midY, centre: true, line: r.midY, into: &bestY)
-            consider(f.minY, r.maxY + gap, line: nil, into: &bestY)
-            consider(f.maxY, r.minY - gap, line: nil, into: &bestY)
+            if yToo {
+                for a in [f.minY, f.maxY] { for b in [r.minY, r.maxY] { consider(a, b, line: b, into: &bestY) } }
+                consider(f.midY, r.midY, centre: true, line: r.midY, into: &bestY)
+                consider(f.minY, r.maxY + gap, line: nil, into: &bestY)
+                consider(f.maxY, r.minY - gap, line: nil, into: &bestY)
+            }
         }
 
         // The middle of the work area: a window dragged near it snaps to dead centre.
         let mid = camera.toCanvas(workArea.center)
         consider(f.midX, mid.x, line: mid.x, span: CGRect(x: mid.x, y: f.minY, width: 0, height: f.height), into: &bestX)
-        consider(f.midY, mid.y, line: mid.y, span: CGRect(x: f.minX, y: mid.y, width: f.width, height: 0), into: &bestY)
+        if yToo { consider(f.midY, mid.y, line: mid.y, span: CGRect(x: f.minX, y: mid.y, width: f.width, height: 0), into: &bestY) }
 
         // Centre on a whole neighbouring row (above / below) or column (left / right).
         let reach = Self.rowSnapReach
@@ -5152,9 +5311,11 @@ final class CanvasController: NSObject {
             let u = row.dropFirst().reduce(row[0]) { $0.union($1) }
             consider(f.midX, u.midX, centre: true, line: u.midX, span: u, into: &bestX)
         }
-        for column in [left, right] where column.count > 1 {
-            let u = column.dropFirst().reduce(column[0]) { $0.union($1) }
-            consider(f.midY, u.midY, centre: true, line: u.midY, span: u, into: &bestY)
+        if yToo {
+            for column in [left, right] where column.count > 1 {
+                let u = column.dropFirst().reduce(column[0]) { $0.union($1) }
+                consider(f.midY, u.midY, centre: true, line: u.midY, span: u, into: &bestY)
+            }
         }
 
         var out = f

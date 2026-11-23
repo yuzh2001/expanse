@@ -130,6 +130,7 @@ extension SavedLayout.Window {
     static func entry(bundleID: String = "com.example.app", appName: String = "Example", title: String = "",
                       x: Double, y: Double, w: Double? = nil, h: Double? = nil, id: UInt32? = nil, pid: Int32? = nil) -> Self {
         SavedLayout.Window(bundleID: bundleID, appName: appName, title: title, x: x, y: y, w: w, h: h,
-                           hx: nil, hy: nil, pw: nil, ph: nil, ox: nil, oy: nil, ow: nil, oh: nil, id: id, pid: pid, away: nil)
+                           hx: nil, hy: nil, pw: nil, ph: nil, ox: nil, oy: nil, ow: nil, oh: nil,
+                           id: id, pid: pid, row: nil, away: nil)
     }
 }

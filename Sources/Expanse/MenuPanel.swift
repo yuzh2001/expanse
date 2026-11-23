@@ -8,7 +8,7 @@ import SwiftUI
 final class MenuPanel: NSObject, NSWindowDelegate {
     enum Action {
         case toggleCanvas, setPaused(Bool), centreWindow, tidy, restoreAll, restoreLayout(URL), takeSnapshot
-        case autoCentre(Bool), wallpaper(Bool), names(Bool), corner(HotCorner.Corner)
+        case autoCentre(Bool), wallpaper(Bool), names(Bool), corner(HotCorner.Corner), rows(Bool)
         case grantAccessibility, grantScreenRecording, installUpdate
         case detailedLogging(Bool), copyLogs, showLogFile, reportIssue
         case openAtLogin(Bool), gap(CGFloat), motion(String), automaticUpdates(Bool), checkForUpdates
@@ -19,7 +19,7 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         var closesPanel: Bool {
             switch self {
             case .setPaused, .autoCentre, .wallpaper, .names, .corner, .detailedLogging, .takeSnapshot,
-                 .openAtLogin, .gap, .motion, .automaticUpdates: false
+                 .openAtLogin, .gap, .motion, .automaticUpdates, .rows: false
             default: true
             }
         }
@@ -45,6 +45,7 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         var autoCentre = true
         var wallpaper = false
         var names = false
+        var rows = false
         var corner = HotCorner.Corner.all
         /// Asked of macOS as the panel opens (see MenuPanel.show), not on every refresh: each is a
         /// round trip to it.
@@ -464,6 +465,7 @@ private struct PanelView: View {
                       isOn: binding(state.autoCentre) { .autoCentre($0) })
             SwitchRow(title: "Desktop picture background", isOn: binding(state.wallpaper) { .wallpaper($0) })
             SwitchRow(title: "Window names when zoomed out", isOn: binding(state.names) { .names($0) })
+            SwitchRow(title: "Arrange in rows", isOn: binding(state.rows) { .rows($0) })
         }
         .padding(.vertical, 4)
         .card()

@@ -80,6 +80,9 @@ final class ManagedWindow {
     var home: CGPoint?
     /// How far the last fit pushed the window to clear an overlap (see fitLayoutToScreen).
     var fitPush: CGVector = .zero
+    /// Which row it's in, in Rows mode (see CanvasController.applyRows): nil = the unsorted grid
+    /// right of the rows. Meaningless in the free layout.
+    var row: Int?
     /// Captured once when first seen, even if it's then on screen and not captured any more.
     var needsFirstFrame = true
     /// The last one-off picture asked for (CACurrentMediaTime), and failures in a row since.

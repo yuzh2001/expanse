@@ -93,3 +93,80 @@ the unit tests — no canvas, controller or screen involved yet.
   its leftmost window.
 - **Automate:** unit: `collapseGap` mid-row, at the row's left edge, on a tight gap; and
   `collapseAll`.
+
+## ROWS-08 Turning Arrange in rows on lays bands out as rows
+- **Type:** Feature
+- **Area:** ROWS
+- **Commits:** unreleased (23 Nov)
+- **Setup:** "Arrange in rows" off, windows loosely in bands on the canvas.
+- **Steps:** Turn "Arrange in rows" on in the menu bar panel.
+- **Expected:** Bands become rows — every window at its row's top at the work area's height
+  (the screen less the menu bar, the Dock and the margins); strays go to the grid right of the
+  rows at their own sizes. The rows' windows are resized for real; x is kept where nothing
+  overlaps.
+- **Automate:** unit: `rowsMode = true` on a fake canvas with two bands and a stray.
+
+## ROWS-09 A new window opens in the grid
+- **Type:** Feature
+- **Area:** ROWS
+- **Commits:** unreleased (23 Nov)
+- **Setup:** "Arrange in rows" on.
+- **Steps:** Open a window anywhere.
+- **Expected:** It joins the unsorted grid right of the rows at its own size (no row is made for
+  it, and nothing in a row moves), and the view glides there as for any window opened off screen.
+- **Automate:** unit: a scan bringing a new standard window, on a rows canvas.
+
+## ROWS-10 A canvas drop lands in a row or back in the grid
+- **Type:** Feature
+- **Area:** ROWS
+- **Commits:** unreleased (23 Nov)
+- **Setup:** "Arrange in rows" on.
+- **Steps:**
+  1. Drag a window so its middle is in another row, over a window's right end.
+  2. Drag one right past the rows' right end.
+- **Expected:** Step 1 lands it in that row after the window it overlapped, the windows to its
+  right shoved on; step 2 puts it back in the grid. While you drag, only x snaps — y follows the
+  pointer — and no built-screen drop zones appear.
+- **Automate:** unit: `rowsDrop` between rows and into the grid region.
+
+## ROWS-11 A display change re-lays the rows
+- **Type:** Feature
+- **Area:** ROWS
+- **Commits:** unreleased (23 Nov)
+- **Setup:** "Arrange in rows" on.
+- **Steps:** Move to a display whose work area is a different height (a Dock shown or not).
+- **Expected:** Rows re-lay at the new row height — same tops, x kept — and the windows' real
+  sizes follow.
+- **Automate:** unit: `refit` after a display change on a rows canvas.
+
+## ROWS-12 A window's row survives restarts
+- **Type:** Feature
+- **Area:** ROWS
+- **Commits:** unreleased (23 Nov)
+- **Setup:** "Arrange in rows" on.
+- **Steps:** Quit Expanse and open it again; come back from minimising a window, or bring its
+  next tab forward; restore a snapshot.
+- **Expected:** Windows come back in their rows and the grid, since the row is saved with the
+  spot and restored with it (layouts saved before rows have no row — the grid — and still load).
+- **Automate:** unit: `savedEntry` → file → `takeSpot`, plus a tab-takeover `Departed` row.
+
+## ROWS-13 Dragging on the canvas snaps sideways only
+- **Type:** Feature
+- **Area:** ROWS
+- **Commits:** unreleased (23 Nov)
+- **Setup:** "Arrange in rows" on, dragging a window on the canvas.
+- **Steps:** Drag near a window's top or bottom edge.
+- **Expected:** The drag snaps sideways (edges, the gap, centres) but the window's y follows the
+  pointer: the row a drop lands in is where the drag's middle is, not a snap.
+- **Automate:** unit: `snap` with `yToo: false` leaves minY alone and draws no y guide.
+
+## ROWS-14 With Arrange in rows off, nothing changes
+- **Type:** Feature
+- **Area:** ROWS
+- **Commits:** unreleased (23 Nov)
+- **Setup:** "Arrange in rows" off (the default).
+- **Steps:** Use Expanse as ever.
+- **Expected:** The free layout is exactly as before: drops note a move, snaps work both ways,
+  no engine pass ever runs.
+- **Automate:** unit: `rowsDrop`/`applyRows` are no-ops with the mode off; `snap`'s default still
+  snaps y.

@@ -23,8 +23,8 @@ app (see Running them).
 | [UPDATE](updates-and-install.md) | Updates, release builds and install | 19 | 2 |
 | [URL](url-scripting.md) | expanse:// scripting | 28 | 1 |
 | [SEC](security.md) | Security hardening | 30 | 25 |
-| [ROWS](rows.md) | Rows layout | 7 | 0 |
-| | **Total** | **499** | **214** |
+| [ROWS](rows.md) | Rows layout | 14 | 0 |
+| | **Total** | **506** | **214** |
 
 [Coverage](coverage.md) lists every commit with the cases that test it, or why none does (docs
 only, a reverted experiment, an empty merge, a release commit).
@@ -35,7 +35,7 @@ Every case has a test (`scripts/test-coverage.sh` checks it): a unit test for ea
 **unit**, and an end-to-end case, a unit test of its logic, or both, for each case marked
 **manual**. A test's name starts with its case's ID.
 
-**Unit tests** (Tests/ExpanseTests, 606 of them, about a minute and a half). Run them before every commit:
+**Unit tests** (Tests/ExpanseTests, 613 of them, about a minute and a half). Run them before every commit:
 ```bash
 scripts/test.sh
 ```

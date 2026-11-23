@@ -541,12 +541,13 @@ import SwiftUI
     }
 
     @Test("UI-35 The panel's switches change settings and leave the panel open (logic)") func ui35() {
-        for action in [MenuPanel.Action.autoCentre(true), .wallpaper(false), .names(true)] {
+        for action in [MenuPanel.Action.autoCentre(true), .wallpaper(false), .names(true), .rows(true)] {
             #expect(!action.closesPanel)
             #expect(!action.needsCanvas)
         }
         let strings = Self.strings(in: Self.panelView(MenuPanel.State(isOn: true)).switches)
-        for title in ["Auto-centre focused window", "Desktop picture background", "Window names when zoomed out", "⇧"] {
+        for title in ["Auto-centre focused window", "Desktop picture background", "Window names when zoomed out",
+                      "Arrange in rows", "⇧"] {
             #expect(strings.contains(title))
         }
     }
@@ -623,7 +624,7 @@ import SwiftUI
     @Test("UI-39 Before the walkthrough is done the panel says so: which actions wait") func ui39a() {
         let waiting: [MenuPanel.Action] = [.toggleCanvas, .setPaused(true), .setPaused(false), .centreWindow, .tidy, .restoreAll,
                                            .restoreLayout(URL(fileURLWithPath: "/tmp/1.json")), .takeSnapshot]
-        let working: [MenuPanel.Action] = [.autoCentre(true), .wallpaper(true), .names(true), .corner(.all), .corner(.off),
+        let working: [MenuPanel.Action] = [.autoCentre(true), .wallpaper(true), .names(true), .rows(true), .corner(.all), .corner(.off),
                                            .grantAccessibility, .grantScreenRecording, .installUpdate,
                                            .detailedLogging(true), .copyLogs, .showLogFile, .reportIssue, .welcome, .quit,
                                            .openAtLogin(true), .gap(10), .motion("jump"), .automaticUpdates(true), .checkForUpdates]

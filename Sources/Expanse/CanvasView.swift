@@ -653,8 +653,10 @@ final class CanvasView: NSView {
             dragged = true
             let proposed = startFrame.offsetBy(dx: (p.x - startPoint.x) / s, dy: (p.y - startPoint.y) / s)
             // Over a drop zone the window follows the pointer, unsnapped (⌘ turns both off).
-            drop = snapEnabled ? dropPlan(for: w, at: p) : nil
-            let (frame, lines) = snapEnabled && drop == nil ? controller.snap(proposed, excluding: [w.id]) : (proposed, [])
+            // Rows mode has no drop zones: only the row a drop lands in, so it snaps sideways only.
+            drop = snapEnabled && !controller.rowsMode ? dropPlan(for: w, at: p) : nil
+            let (frame, lines) = snapEnabled && drop == nil
+                ? controller.snap(proposed, excluding: [w.id], yToo: !controller.rowsMode) : (proposed, [])
             w.canvasFrame = frame
             showGuides(lines)
             render()
@@ -665,7 +667,8 @@ final class CanvasView: NSView {
             // Snap the group's bounding box as one block against everything else.
             let bounds = starts.map(\.1).reduce(starts[0].1) { $0.union($1) }
             let proposed = bounds.offsetBy(dx: d.dx, dy: d.dy)
-            let (snapped, lines) = snapEnabled ? controller.snap(proposed, excluding: Set(starts.map(\.0.id))) : (proposed, [])
+            let (snapped, lines) = snapEnabled
+                ? controller.snap(proposed, excluding: Set(starts.map(\.0.id)), yToo: !controller.rowsMode) : (proposed, [])
             let dx = d.dx + snapped.minX - proposed.minX, dy = d.dy + snapped.minY - proposed.minY
             for (w, start) in starts { w.canvasFrame = start.offsetBy(dx: dx, dy: dy) }
             showGuides(lines)
@@ -714,7 +717,12 @@ final class CanvasView: NSView {
                 w.canvasFrame = startFrame
                 controller.arrange(d.placements, screen: d.screen.origin, members: d.members, how: "drop")
             } else if dragged {
-                controller.noteUserMove(w, from: startFrame.origin)
+                if controller.rowsMode {
+                    // The row its middle is in, or back in the grid (see CanvasController.rowsDrop).
+                    controller.rowsDrop(w, at: w.canvasFrame)
+                } else {
+                    controller.noteUserMove(w, from: startFrame.origin)
+                }
                 controller.scheduleSave()
             } else {
                 selected.removeAll()
@@ -722,7 +730,14 @@ final class CanvasView: NSView {
             }
         case .group(let w, let starts, _):
             if dragged {
-                for (moved, start) in starts { controller.noteUserMove(moved, from: start.origin) }
+                if controller.rowsMode {
+                    // Each window drops where the group's drag left it, left to right.
+                    for (moved, _) in starts.sorted(by: { $0.0.canvasFrame.minX < $1.0.canvasFrame.minX }) {
+                        controller.rowsDrop(moved, at: moved.canvasFrame)
+                    }
+                } else {
+                    for (moved, start) in starts { controller.noteUserMove(moved, from: start.origin) }
+                }
                 controller.scheduleSave()
             } else {
                 selected.removeAll()
@@ -736,6 +751,8 @@ final class CanvasView: NSView {
                 let target = w.canvasFrame
                 w.canvasFrame = start
                 controller.resize(w, to: target.size, at: target.origin, how: "handle")
+                // Rows mode: a row's height snaps back, its width stays as dragged.
+                if controller.rowsMode { controller.applyRows() }
             }
         case .pan:
             if spaceHeld { NSCursor.openHand.set() }

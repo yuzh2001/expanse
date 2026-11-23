@@ -26,6 +26,11 @@ What we might build next. New requests go in as they come up, and finished work 
   (DISPLAY-31): macOS would draw it on just one display and it would join that display's Space.
   Before, it was placed across both and showed on the other display alone. Mostly back on the
   main display it returns as a real window by itself.
+- "Arrange in rows" (the panel's switches, off by default): rows of same-height windows — the
+  work area's height less the margins — with x free inside a row (ROWS-01…14). Dropping a window
+  into a row shoves the windows to its right; above or below every row a new one opens; right of
+  the rows an unsorted grid packs the rest, new windows included. Windows already in bands go
+  into rows when it's turned on; turning it off leaves everything where it is.
 
 ## Bugs
 
