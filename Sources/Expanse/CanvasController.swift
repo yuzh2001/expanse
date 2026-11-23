@@ -6,7 +6,7 @@ import os
 /// Owns the canvas: which windows are on it, the camera, and the two modes.
 ///
 /// Live mode: camera scale is 1 and real windows sit exactly where the camera says.
-/// Windows outside the viewport are parked in the bottom-right screen corner. The overlay
+/// Windows outside the viewport are parked in a screen corner no other display covers. The overlay
 /// sinks below all app windows and becomes the desktop: the canvas backdrop, plus proxies
 /// for parked windows. Scrolling or pinching on it switches to canvas mode.
 ///
@@ -144,7 +144,7 @@ final class CanvasController: NSObject {
         // its bottom edge instead. Nil if it wasn't here.
         func rise(canvas: CGRect, placed: CGPoint?, parked: Bool) -> CGFloat? {
             guard fits(canvas.size) else { return nil }
-            if parked { return inParkingCorner(real.origin) ? 0 : nil }
+            if parked { return inParkingCorner(real) ? 0 : nil }
             for r in [0, real.height - canvas.height] {
                 if near(canvas.origin, CGPoint(x: w.canvasFrame.minX, y: w.canvasFrame.minY + r)) { return r }
                 if let placed, near(placed, CGPoint(x: real.minX, y: real.minY + r)) { return r }
@@ -285,6 +285,22 @@ final class CanvasController: NSObject {
     private var screenFrame: CGRect { displayOverride?.frame ?? screen.frame }
     private var usableFrame: CGRect { displayOverride?.usable ?? screen.visibleFrame }
 
+    /// Tests pretend the other displays too (like displayOverride): their frames in global CG
+    /// coordinates already, so no conversion applies.
+    private var otherDisplaysOverride: [CGRect]?
+
+    /// Every display but the main one, in global CG coordinates (top-left origin of the main
+    /// display, y down). NSScreen's frames share the main display's frame with a bottom-left
+    /// origin, y up; screenRectCG is the main display at origin zero.
+    private var otherDisplays: [CGRect] {
+        if let otherDisplaysOverride { return otherDisplaysOverride }
+        let mainFrame = screen.frame
+        return NSScreen.screens.dropFirst().map { s in
+            let f = s.frame
+            return CGRect(x: f.minX, y: mainFrame.maxY - f.maxY, width: f.width, height: f.height)
+        }
+    }
+
     private var screenSize: CGSize { screenOverride ?? screenFrame.size }
 
     /// The overlay area in global CG coordinates (top-left origin, y down): the screen minus the menu bar.
@@ -299,23 +315,96 @@ final class CanvasController: NSObject {
     /// The part of the canvas the screen shows (canvas space), as the minimap outlines it.
     var visibleCanvas: CGRect { camera.toCanvas(CGRect(origin: .zero, size: viewSize)) }
 
-    /// Where parked windows go: only their top-left pixel stays on screen.
-    private var parkPoint: CGPoint { CGPoint(x: screenRectCG.maxX - 1, y: screenRectCG.maxY - 1) }
+    /// Which bottom corner windows park in (see parkPoint).
+    private enum ParkSide { case right, left }
 
-    /// Only Expanse puts windows in the parking corner; nobody drags a window there. A window
+    /// The off-screen strip a window parked on `side` hangs over, in global CG coordinates:
+    /// the bottom band past that edge (the -100 covers macOS nudging parked windows up 30-80pt).
+    /// With a display reaching into it, a window parked there shows on that display in full.
+    private func quadrant(_ side: ParkSide) -> CGRect {
+        let s = screenRectCG
+        switch side {
+        case .right: return CGRect(x: s.maxX, y: s.maxY - 100, width: 100_000, height: 100_100)
+        case .left: return CGRect(x: -100_000, y: s.maxY - 100, width: 100_000, height: 100_100)
+        }
+    }
+
+    /// No other display covers `side`'s parking quadrant.
+    private func freeForParking(_ side: ParkSide) -> Bool {
+        let q = quadrant(side)
+        return !otherDisplays.contains { $0.intersects(q) }
+    }
+
+    /// The corner windows park in: the bottom-right, or the bottom-left when another display
+    /// covers the right quadrant (a window parked there would show on it in full). Both sides
+    /// covered: the right corner, as before.
+    private var parkSide: ParkSide {
+        if freeForParking(.right) { return .right }
+        return freeForParking(.left) ? .left : .right
+    }
+
+    /// Where a parked window of `size` goes: only its top corner pixel stays on screen,
+    /// top-left on the right side, top-right on the left.
+    private func parkPoint(for size: CGSize) -> CGPoint {
+        switch parkSide {
+        case .right: return CGPoint(x: screenRectCG.maxX - 1, y: screenRectCG.maxY - 1)
+        case .left: return CGPoint(x: 1 - size.width, y: screenRectCG.maxY - 1)
+        }
+    }
+
+    /// The parking corners a frame can be found in, for inParkingCorner and the background
+    /// scan (ScanInput.parking): the side windows park at now (parkSide), plus any side whose
+    /// quadrant no other display covers. A window parked at a side that was free when it was
+    /// parked still reads as parked after the arrangement changed; a window sitting on another
+    /// display never does.
+    private struct ParkingArea {
+        /// Top-left of the recognised right corner; nil if right isn't recognised.
+        var right: CGPoint? = nil
+        /// The strip a left-parked window's right edge stays within (maxX ≤ leftX + 40): the
+        /// usable area's left inset (a Dock on the left), mirroring the right side's math.
+        /// Nil if left isn't recognised.
+        var leftX: CGFloat? = nil
+        /// The usable area's bottom edge (see parkingCorner).
+        var bottom: CGFloat = 0
+
+        func contains(_ r: CGRect) -> Bool {
+            if let right, r.minX >= right.x, r.minY >= right.y { return true }
+            if let leftX, r.maxX <= leftX + 40, r.minY >= bottom - 80 { return true }
+            return false
+        }
+    }
+
+    /// The parking corners recognised now (see ParkingArea), built on the main thread so the
+    /// background scan can take a copy.
+    private var parkingArea: ParkingArea {
+        let f = screenFrame, usable = usableFrame
+        let side = parkSide
+        var area = ParkingArea(bottom: screenRectCG.maxY - max(0, usable.minY - f.minY))
+        if side == .right || freeForParking(.right) { area.right = parkingCorner }
+        if side == .left || freeForParking(.left) { area.leftX = max(0, usable.minX - f.minX) }
+        return area
+    }
+
+    /// Only Expanse puts windows in a parking corner; nobody drags a window there. A window
     /// found there is hidden, not moved, even if a placement failed to register (apps answer
     /// slowly around sleep and wake), so it must never take that spot as its canvas position.
-    private func inParkingCorner(_ p: CGPoint) -> Bool {
-        let corner = parkingCorner
-        return p.x >= corner.x && p.y >= corner.y
+    private func inParkingCorner(_ r: CGRect) -> Bool {
+        parkingArea.contains(r)
     }
 
     /// Whether `w` at `p` is parked, not moved. macOS won't set a window taller than the screen down
-    /// in the corner: it keeps the window's top below the menu bar, at the same right edge (Tart's
-    /// 1600x1028 on a 1512x982 screen, parked at {1511, 981}, goes to {1511, 33}). Only one Expanse
+    /// in the corner: it keeps the window's top below the menu bar, at the same edge (Tart's
+    /// 1600x1028 on a 1512x982 screen, parked at {1511, 981}, goes to {1511, 33}; the left side
+    /// mirrors that, its right edge staying within the corner strip). Only one Expanse
     /// parked: dragged nearly off that edge, a window you're moving is still followed.
     private func stillParked(_ w: ManagedWindow, at p: CGPoint) -> Bool {
-        inParkingCorner(p) || (w.parked && w.canvasFrame.height > viewport.height && p.x >= parkingCorner.x)
+        let area = parkingArea
+        let f = CGRect(origin: p, size: w.realSize)
+        if area.contains(f) { return true }
+        guard w.parked, f.height > viewport.height else { return false }
+        if let right = area.right, p.x >= right.x { return true }
+        if let leftX = area.leftX, f.maxX <= leftX + 40 { return true }
+        return false
     }
 
     /// Top-left of the parking corner. macOS nudges a parked window back until a strip of it is
@@ -2090,8 +2179,8 @@ final class CanvasController: NSObject {
         var kinds: [CGWindowID: WindowKind] = [:]
         /// Live mode: tracked windows' real frames matter (zoomed out, they aren't followed).
         var live = false
-        /// Top-left of the parking corner (see inParkingCorner).
-        var corner = CGPoint.zero
+        /// The parking corners recognised when the scan started (see inParkingCorner).
+        var parking = ParkingArea()
         /// Window moves and resizes so far and the camera, when the scan started: if any has
         /// changed by the time it's applied, its frames are out of date (see apply).
         var moves = 0
@@ -2122,7 +2211,7 @@ final class CanvasController: NSObject {
 
     private func scanInput() -> ScanInput {
         var input = ScanInput(kinds: windowKinds, live: !isActive && !suspendTracking,
-                              corner: parkingCorner,
+                              parking: parkingArea,
                               moves: ManagedWindow.moves, resizes: ManagedWindow.resizes, camera: camera)
         let vp = viewport
         for w in windows {
@@ -2175,7 +2264,7 @@ final class CanvasController: NSObject {
             if let tracked = input.tracked[id] {
                 guard input.live else { continue }
                 if let expected = tracked.expected, close(sc.frame, expected) { continue }
-                if tracked.parked, sc.frame.minX >= input.corner.x, sc.frame.minY >= input.corner.y { continue }
+                if tracked.parked, input.parking.contains(sc.frame) { continue }
                 if let ax = tracked.ax, let p = AX.position(ax), let s = AX.size(ax), s.width > 0, s.height > 0 {
                     snapshot.frames[id] = CGRect(origin: p, size: s)
                 }
@@ -2570,7 +2659,7 @@ final class CanvasController: NSObject {
             returning = true
             reopened = true
             logger.info("\(w.appName, privacy: .public)[\(w.id)] is a small window of an app opening again: centred on its window's spot")
-        } else if inParkingCorner(f.origin) {
+        } else if inParkingCorner(f) {
             // In the parking corner with no record of where it belongs (a previous run that
             // didn't exit cleanly, or a lost record): bring it out where it can be seen.
             global = CGPoint(x: viewport.midX - f.width / 2, y: viewport.minY + 40)
@@ -4445,7 +4534,7 @@ final class CanvasController: NSObject {
             if goesOnScreen(r, in: vp) {
                 return (w, CGPoint(x: r.minX.rounded(), y: r.minY.rounded()), false)
             }
-            return (w, parkPoint, true)
+            return (w, parkPoint(for: w.realSize), true)
         }
     }
 

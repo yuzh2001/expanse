@@ -851,4 +851,61 @@ struct DISPLAYTests {
         d.apply([], ax: none)
         #expect(d.windows.isEmpty)
     }
+
+    // MARK: DISPLAY-30
+
+    @Test("DISPLAY-30 Windows are parked in a corner no other display covers")
+    func display30() {
+        let w = Self.win(3001, 5000, 300, 800, 600)
+        let c = TestCanvas.make(windows: [w])
+        defer { Self.finish(c) }
+        // No other display: the bottom-right corner, as always.
+        #expect(c.parkSide == .right)
+        #expect(c.parkPoint(for: w.canvasFrame.size) == CGPoint(x: 1511, y: 981))
+        let plan = c.commitPlan()
+        #expect(plan.first?.1 == CGPoint(x: 1511, y: 981) && plan.first?.2 == true)
+
+        // A display to the right covers that quadrant: windows park at the bottom-left, only
+        // their top-right pixel on the screen.
+        c.otherDisplaysOverride = [CGRect(x: 1512, y: 0, width: 1920, height: 1080)]
+        #expect(c.parkSide == .left)
+        #expect(c.parkPoint(for: w.canvasFrame.size) == CGPoint(x: -799, y: 981))
+        let leftPlan = c.commitPlan()
+        #expect(leftPlan.first?.1 == CGPoint(x: -799, y: 981) && leftPlan.first?.2 == true)
+        // macOS nudges a parked window a strip back on screen: still read as parked...
+        let area = c.parkingArea
+        #expect(area.contains(CGRect(x: -797, y: 940, width: 800, height: 600)))
+        // ...while the right corner is a real spot on that display now, not parking.
+        #expect(!area.contains(CGRect(x: 1480, y: 940, width: 600, height: 400)))
+        // A tall parked window macOS kept at the edge and moved to the top reads parked too.
+        let tall = Self.win(3002, 6000, 300, 800, 1200)
+        tall.parked = true
+        #expect(c.stillParked(tall, at: CGPoint(x: -799, y: 33)))
+
+        // The real window wider than the canvas one (an app's minimum width, a VM window
+        // sizing itself): the park point leaves its real right edge at the 1px column, and
+        // being there still reads as parked, not as moved.
+        let wide = Fake.window(id: 3003, canvas: CGRect(x: 7000, y: 300, width: 800, height: 600),
+                               real: CGRect(x: 0, y: 0, width: 1000, height: 600))
+        c.windows.append(wide)
+        let widePlan = c.commitPlan().first { $0.0 === wide }
+        #expect(widePlan?.1 == CGPoint(x: -999, y: 981) && widePlan?.2 == true)
+        wide.parked = true
+        #expect(c.stillParked(wide, at: CGPoint(x: -999, y: 981)))
+
+        // Only a display to the left: the right corner stays.
+        c.otherDisplaysOverride = [CGRect(x: -1920, y: 0, width: 1920, height: 1080)]
+        #expect(c.parkSide == .right)
+
+        // Both sides covered: the right corner anyway, as before.
+        c.otherDisplaysOverride = [CGRect(x: 1512, y: 0, width: 1920, height: 1080),
+                                   CGRect(x: -1920, y: 0, width: 1920, height: 1080)]
+        #expect(c.parkSide == .right)
+
+        // A display left of the main one and lower down covers the left quadrant: its windows
+        // near that edge are its own, not parked ones.
+        c.otherDisplaysOverride = [CGRect(x: -1600, y: 400, width: 1600, height: 900)]
+        #expect(c.parkSide == .right)
+        #expect(!c.parkingArea.contains(CGRect(x: -1000, y: 950, width: 800, height: 600)))
+    }
 }

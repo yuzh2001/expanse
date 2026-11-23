@@ -66,6 +66,13 @@ final class ManagedWindow {
     /// When Expanse last resized it (CACurrentMediaTime): an app catching up with that (Chromium
     /// resizes in steps) isn't you choosing a size.
     var lastSizedAt: CFTimeInterval = 0
+    /// The real window's size as the window server last reported it, or the canvas size when
+    /// that isn't known. It can differ from canvasFrame's — an app's minimum width, a VM
+    /// window sizing itself, a resize macOS refused.
+    var realSize: CGSize {
+        let s = scWindow.frame.size
+        return s.width > 0 && s.height > 0 ? s : canvasFrame.size
+    }
     /// Where macOS had the window before Expanse managed it (global CG). Restored on quit / pause.
     var originalFrame: CGRect = .zero
     /// Where the window sits in the home layout: the arrangement at full chosen sizes (the big

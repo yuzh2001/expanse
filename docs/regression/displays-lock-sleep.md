@@ -376,3 +376,15 @@
 - **Expected:** Every window is where it was on the canvas (fitted to the screen it's back on, as for any display change); none is taken on as new.
 - **Check in log:** `… windows missing from a scan with no display: kept until it's clear they're closed`, and no `dropped … not in the window list` for them.
 - **Automate:** unit: `dropsHeld` (no display: nothing dropped; every window missing at once: dropped only once that's held for 3s).
+
+## DISPLAY-30 Windows are parked in a corner no other display covers
+- **Type:** Bug fix
+- **Area:** DISPLAY
+- **Commits:** unreleased (22 Nov)
+- **Before:** Windows out of view were always parked at the main display's bottom-right corner. With a second display to the right of (or below-right of) the main one, that spot is on the other display, so a parked window showed there in full.
+- **Setup:** A main display with a second display to its right; a window out of view on the canvas.
+- **Steps:**
+  1. Move a window out of view (pan the canvas past it, or zoom out and back).
+  2. Look at the second display.
+- **Expected:** The window is parked at the bottom-left corner of the main display, only a pixel of it on screen; nothing shows on the other display. With no display covering the right corner (none, or displays on the left only), windows park at the bottom-right as before; with both covered, the right corner is used as before. A window parked before the arrangement changed is re-parked at the free corner by the relayout that follows it.
+- **Automate:** unit: `parkSide`/`parkPoint`/`parkingArea` (free corner chosen per arrangement; a nudged left-parked frame and a tall one moved to the top read as parked; a window on another display doesn't).
