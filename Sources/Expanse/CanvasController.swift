@@ -82,6 +82,7 @@ final class CanvasController: NSObject {
     private var scrollMonitor: Any?
     private var ownGestureMonitor: Any?
     private let scrollTap = ScrollTap()
+    private let gestures = TrackpadGestures()
     private var observers: [pid_t: AppObserver] = [:]
     private var syncSoonWork: DispatchWorkItem?
     private var saved: SavedLayout?
@@ -116,6 +117,15 @@ final class CanvasController: NSObject {
     var autoCentre: Bool {
         get { UserDefaults.standard.object(forKey: "autoCentre") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "autoCentre") }
+    }
+    /// Trackpad swipes (with macOS's own turned off): a three-finger swipe hops like ⌃ + arrow,
+    /// four fingers up toggles the canvas like ⌥`.
+    var gesturesEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "trackpadGestures") as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "trackpadGestures")
+            gestures.enabled = newValue
+        }
     }
     /// Canvas spots of windows that disappeared (minimized, app hidden, closed). Window IDs
     /// are never reused, so a returning ID means the same window coming back.
@@ -426,10 +436,14 @@ final class CanvasController: NSObject {
         camera.toCanvas(CGPoint(x: g.x - viewport.minX, y: g.y - viewport.minY))
     }
 
+    /// The overlay really goes on screen; the tests park it this far to the left instead
+    /// (Env.isolate), where it covers nothing but still counts as on screen.
+    static var overlayOffset: CGFloat = 0
+
     private func updateOverlayFrame() {
         let f = screenFrame
         let vp = viewport
-        overlay.setFrame(NSRect(x: f.minX + vp.minX, y: f.maxY - vp.maxY, width: vp.width, height: vp.height), display: false)
+        overlay.setFrame(NSRect(x: f.minX + vp.minX - Self.overlayOffset, y: f.maxY - vp.maxY, width: vp.width, height: vp.height), display: false)
         view.menuBarHeight = vp.minY
     }
 
@@ -757,6 +771,27 @@ final class CanvasController: NSObject {
         }
         if !scrollTap.start() {
             logger.notice("no event tap for ⌃⌥ + scroll (Accessibility not granted?): the app under the pointer gets a gesture's first ticks")
+        }
+        // Trackpad swipes: three fingers hop like ⌃ + arrow, four up toggles the canvas (⌥`).
+        // They only watch touches — nothing is swallowed — so macOS's own swipes with the same
+        // finger count would fire too, and want turning off in Trackpad settings.
+        gestures.enabled = gesturesEnabled
+        gestures.onSwipe = { [weak self] fingers, direction in
+            guard let self else { return }
+            switch (fingers, direction) {
+            case (4, .up): self.toggle()
+            case (3, _): self.navigate(direction)
+            default: break
+            }
+        }
+        if !gestures.start() {
+            logger.info("no trackpad for swipe gestures (none found, or MultitouchSupport moved)")
+        }
+        // The framework's devices can go quiet across a sleep: listen again on wake.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification,
+                                                          object: nil, queue: .main) { [weak self] _ in
+            self?.gestures.stop()
+            _ = self?.gestures.start()
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didTerminateApplicationNotification,
                                                           object: nil, queue: .main) { [weak self] note in

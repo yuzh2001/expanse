@@ -24,7 +24,8 @@ app (see Running them).
 | [URL](url-scripting.md) | expanse:// scripting | 28 | 1 |
 | [SEC](security.md) | Security hardening | 30 | 25 |
 | [ROWS](rows.md) | Rows layout | 15 | 1 |
-| | **Total** | **508** | **216** |
+| [SWIPE](gestures.md) | Trackpad gestures | 3 | 2 |
+| | **Total** | **511** | **218** |
 
 [Coverage](coverage.md) lists every commit with the cases that test it, or why none does (docs
 only, a reverted experiment, an empty merge, a release commit).
