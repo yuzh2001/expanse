@@ -8,8 +8,13 @@ import os
 /// monitor's event (see ScrollTap). Nothing is swallowed: macOS's own swipes still fire too, so
 /// they want the same finger counts off in Trackpad settings.
 final class TrackpadGestures {
-    /// Called with each swipe: its finger count (3 or 4) and direction. On the main thread.
+    /// Called with each four-finger swipe: its direction (up toggles the canvas, down dives
+    /// into the window under the mouse). On the main thread.
     var onSwipe: ((Int, CanvasController.Direction) -> Void)?
+    /// Three settled fingers dragging the canvas: the center's move since the last frame, in
+    /// trackpad units (0…1), then panEnd once when the touch ends or changes. On the main thread.
+    var onPan: ((CGVector) -> Void)?
+    var onPanEnd: (() -> Void)?
     /// Off while the setting's off: frames are ignored, a gesture under way forgotten. Set on the
     /// main thread, read on the touch thread, so a lock (see ScrollTap).
     var enabled: Bool {
@@ -123,45 +128,62 @@ final class TrackpadGestures {
             return e
         }
         for event in events {
-            guard case .swipe(let fingers, let direction) = event else { continue }
-            lock.withLock { lastFire = Date() }
-            DispatchQueue.main.async { [weak self] in self?.onSwipe?(fingers, direction) }
+            switch event {
+            case .swipe(let fingers, let direction):
+                lock.withLock { lastFire = Date() }
+                DispatchQueue.main.async { [weak self] in self?.onSwipe?(fingers, direction) }
+            case .pan(let dx, let dy):
+                DispatchQueue.main.async { [weak self] in self?.onPan?(CGVector(dx: dx, dy: dy)) }
+            case .panEnd:
+                DispatchQueue.main.async { [weak self] in self?.onPanEnd?() }
+            }
         }
     }
 }
 
-/// Turns raw trackpad frames (how many fingers touch, and where their center is) into swipes.
+/// Turns raw trackpad frames (how many fingers touch, and where their center is) into gestures:
+/// three settled fingers pan continuously, a settled four-finger move fires one swipe.
 ///
-/// A swipe starts when three or four fingers touch — the count latches, and fingers that land a
-/// frame apart still make one gesture. Once their center travels far enough one way it fires
-/// once, then nothing until every finger lifts. Any other count (typing palms, two-finger
+/// A gesture starts when three or four fingers touch — the count latches, and fingers that land
+/// a frame apart still make one. Once the count has held still for a few frames, three fingers
+/// report every move as a pan delta; four report a swipe once their center travels far enough
+/// one way, then nothing until every finger lifts. Any other count (typing palms, two-finger
 /// scrolls, Three-Finger Drag) is ignored.
 struct SwipeRecognizer {
     enum Event: Equatable {
-        /// The swipe's finger count and direction.
+        /// A four-finger swipe's direction (up toggles the canvas, down dives into a window).
         case swipe(fingers: Int, direction: CanvasController.Direction)
+        /// Three settled fingers moved: pan by this much, in trackpad units (0…1, y up).
+        case pan(dx: Double, dy: Double)
+        /// A panning touch ended: fingers all lifted, or one joined or left.
+        case panEnd
     }
 
     private enum Phase { case idle, undecided, done }
     private var phase = Phase.idle
-    /// How many fingers this swipe has, 3 or 4.
+    /// How many fingers this gesture has, 3 or 4.
     private var fingers = 0
     private var origin = (x: 0.0, y: 0.0)
-    /// Fingers touching in the last frame (any count), so a swipe's owner can ignore the
+    /// The center last frame, for a pan's deltas.
+    private var last = (x: 0.0, y: 0.0)
+    /// A pan is being reported: it ends with a panEnd when the touch ends or changes.
+    private var panning = false
+    /// Fingers touching in the last frame (any count), so a gesture's owner can ignore the
     /// scroll events the same fingers keep making (see TrackpadGestures.suppressesScrolls).
     private(set) var down = 0
     /// A gesture has been decided (fired, or aborted by a finger leaving) and not all fingers
-    /// have lifted: what they still do isn't a scroll either.
+    /// have lifted: what they still do isn't a scroll or a pan either.
     var done: Bool { phase == .done }
     /// Frames the finger count has held still for. A swipe can't fire until it settles: real
-    /// fingers land a frame or two apart, and a fourth joining late mustn't leave the swipe
-    /// latched as a three-finger one (it would hop instead of toggling the canvas).
+    /// fingers land a frame or two apart, and a fourth joining late mustn't leave the gesture
+    /// latched as a three-finger one (it would pan instead of toggling the canvas).
     private var settled = 0
 
-    /// How far the center must move before it's a swipe (a fraction of the trackpad's width), and
-    /// how much the longer axis must beat the shorter by for the direction to count.
+    /// How far the center must move before four fingers make a swipe (a fraction of the
+    /// trackpad's width), and how much the longer axis must beat the shorter by for the
+    /// direction to count.
     static let travel = 0.05, dominance = 1.2
-    /// Frames the finger count must hold still before a swipe may fire: about 30ms at the
+    /// Frames the finger count must hold still before a gesture may start: about 30ms at the
     /// trackpad's ~100Hz, imperceptible but long enough for a late finger to join.
     static let settle = 3
 
@@ -173,21 +195,38 @@ struct SwipeRecognizer {
             guard count == 3 || count == 4 else { return [] }
             fingers = count
             origin = (x, y)
+            last = (x, y)
             settled = 0
             phase = .undecided
             return []
         case .undecided:
-            if count == 0 { phase = .idle; return [] }
-            if count == 3 || count == 4 {
-                // A finger joining or leaving before the swipe starts: the gesture's count
-                // relatches, the settle window restarts, and travel is measured from here.
-                if count != fingers { fingers = count; origin = (x, y); settled = 0 }
-                else { settled += 1 }
-            } else {
-                phase = .done
-                return []
+            if count == 0 {
+                phase = .idle
+                return panning ? endPan() : []
             }
-            guard settled >= Self.settle else { return [] }
+            guard count == 3 || count == 4 else {
+                // A finger leaving early: the gesture can't start, and can't until all lift.
+                phase = .done
+                return panning ? endPan() : []
+            }
+            if count != fingers {
+                // A finger joining or leaving before the gesture settles: its count relatches,
+                // the settle window restarts, a pan under way ends first.
+                let end = panning ? endPan() : []
+                fingers = count
+                origin = (x, y)
+                last = (x, y)
+                settled = 0
+                return end
+            }
+            settled += 1
+            guard settled >= Self.settle else { last = (x, y); return [] }
+            if fingers == 3 {
+                let (dx, dy) = (x - last.x, y - last.y)
+                last = (x, y)
+                panning = true
+                return dx != 0 || dy != 0 ? [.pan(dx: dx, dy: dy)] : []
+            }
             let (dx, dy) = (x - origin.x, y - origin.y)
             guard abs(dx) > Self.travel || abs(dy) > Self.travel,
                   max(abs(dx), abs(dy)) > Self.dominance * min(abs(dx), abs(dy)) else { return [] }
@@ -197,5 +236,10 @@ struct SwipeRecognizer {
             if count == 0 { phase = .idle }
             return []
         }
+    }
+
+    private mutating func endPan() -> [Event] {
+        panning = false
+        return [.panEnd]
     }
 }

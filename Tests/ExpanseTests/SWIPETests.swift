@@ -4,9 +4,10 @@ import AppKit
 @_private(sourceFile: "CanvasController.swift") @testable import Expanse
 @_private(sourceFile: "MenuPanel.swift") @testable import Expanse
 
-/// TrackpadGestures.SwipeRecognizer: raw finger counts and centers in, swipes out. The frames are
-/// fractions of the trackpad (0…1, y up), a swipe firing once per touch-down — and only once the
-/// finger count has held still for a few frames, so a finger landing late still joins it.
+/// TrackpadGestures.SwipeRecognizer: raw finger counts and centers in, gestures out. The frames
+/// are fractions of the trackpad (0…1, y up): three settled fingers report every move as a pan,
+/// four fire one swipe per touch-down — and only once the finger count has held still for a few
+/// frames, so a finger landing late still joins it.
 @Suite("SWIPE: Trackpad swipe recognition") struct SWIPETests {
 
     /// `steps` of (fingers down, center x, center y), events collected.
@@ -19,32 +20,47 @@ import AppKit
         .swipe(fingers: fingers, direction: d)
     }
 
-    @Test("SWIPE-01 A four-finger swipe up fires once")
-    func fourUp() {
-        let events = Self.run([(4, 0.5, 0.5), (4, 0.5, 0.53), (4, 0.5, 0.57), (4, 0.5, 0.7), (0, 0, 0)])
-        #expect(events == [Self.swipe(4, .up)])
+    /// The pan deltas in `events` — Doubles that can't be compared exactly.
+    private static func pans(_ events: [SwipeRecognizer.Event]) -> [(dx: Double, dy: Double)] {
+        events.compactMap { if case .pan(let dx, let dy) = $0 { return (dx, dy) }; return nil }
     }
 
-    @Test("SWIPE-01 A three-finger swipe fires in each direction")
-    func threeAllWays() {
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.5, 0.52), (3, 0.5, 0.55), (3, 0.5, 0.58)]) == [Self.swipe(3, .up)])
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.5, 0.48), (3, 0.5, 0.45), (3, 0.5, 0.42)]) == [Self.swipe(3, .down)])
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.52, 0.5), (3, 0.55, 0.5), (3, 0.58, 0.5)]) == [Self.swipe(3, .right)])
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.48, 0.5), (3, 0.45, 0.5), (3, 0.42, 0.5)]) == [Self.swipe(3, .left)])
+    @Test("SWIPE-01 A four-finger swipe fires once, up or down")
+    func fourUpDown() {
+        let up = Self.run([(4, 0.5, 0.5), (4, 0.5, 0.53), (4, 0.5, 0.57), (4, 0.5, 0.7), (0, 0, 0)])
+        #expect(up == [Self.swipe(4, .up)])
+        let down = Self.run([(4, 0.5, 0.5), (4, 0.5, 0.47), (4, 0.5, 0.43), (4, 0.5, 0.3), (0, 0, 0)])
+        #expect(down == [Self.swipe(4, .down)])
+    }
+
+    @Test("SWIPE-01 Three settled fingers pan with every move, ending when they lift")
+    func threePans() {
+        let events = Self.run([(3, 0.5, 0.5), (3, 0.5, 0.52), (3, 0.5, 0.55), (3, 0.5, 0.58),
+                               (3, 0.5, 0.62), (0, 0, 0)])
+        let pans = Self.pans(events)
+        // Two settled moving frames: two deltas, and the pan ends on lift.
+        #expect(pans.count == 2 && pans.allSatisfy { $0.dx == 0 && $0.dy > 0 })
+        #expect(events.last == .panEnd)
+        // Diagonals report both axes.
+        #expect(Self.pans(Self.run([(3, 0.5, 0.5), (3, 0.52, 0.52), (3, 0.55, 0.55), (3, 0.58, 0.58)]))
+                .allSatisfy { $0.dx > 0 && $0.dy > 0 })
+    }
+
+    @Test("SWIPE-01 A finger joining or leaving ends the pan")
+    func panEnds() {
+        // Three panning, one lifts: the pan ends and nothing more comes of the touch.
+        #expect(Self.run([(3, 0.5, 0.5), (3, 0.5, 0.52), (3, 0.5, 0.55), (3, 0.5, 0.58),
+                          (2, 0.5, 0.58), (2, 0.5, 0.8)]).last == .panEnd)
+        // A fourth joining: the pan ends, the touch is a four-finger candidate again.
+        let events = Self.run([(3, 0.5, 0.5), (3, 0.5, 0.53), (3, 0.5, 0.56), (3, 0.5, 0.59),
+                               (4, 0.5, 0.5), (4, 0.5, 0.52), (4, 0.5, 0.55), (4, 0.5, 0.58), (4, 0.5, 0.62)])
+        #expect(events.contains(.panEnd) && events.last == Self.swipe(4, .up))
     }
 
     @Test("SWIPE-01 Fingers landing a frame apart make one swipe of the final count")
     func staggered() {
-        // Three fingers down, then a fourth joins before the swipe starts: a four-finger swipe.
+        // Three fingers down, then a fourth joins before the gesture settles: a four-finger swipe.
         #expect(Self.run([(3, 0.5, 0.5), (4, 0.51, 0.51), (4, 0.51, 0.53), (4, 0.51, 0.56), (4, 0.51, 0.6)])
-                == [Self.swipe(4, .up)])
-    }
-
-    @Test("SWIPE-01 Three fingers moving don't pre-empt the fourth still landing")
-    func lateFourth() {
-        // Three fingers already travelling — past the travel threshold but the count unsettled —
-        // then the fourth joins: the swipe fires as four-fingered, not three.
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.55, 0.5), (4, 0.5, 0.5), (4, 0.5, 0.53), (4, 0.5, 0.56), (4, 0.5, 0.6)])
                 == [Self.swipe(4, .up)])
     }
 
@@ -54,15 +70,15 @@ import AppKit
         #expect(Self.run([(5, 0.5, 0.5), (5, 0.5, 0.8), (0, 0, 0)]).isEmpty)
     }
 
-    @Test("SWIPE-02 A drift below the threshold, or a diagonal that isn't dominant, doesn't fire")
+    @Test("SWIPE-02 Four fingers drifting below the threshold, or diagonally, don't fire")
     func undecided() {
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.51, 0.5), (3, 0.52, 0.5), (3, 0.53, 0.5), (0, 0, 0)]).isEmpty)
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.53, 0.53), (3, 0.55, 0.55), (3, 0.56, 0.56), (0, 0, 0)]).isEmpty)
+        #expect(Self.run([(4, 0.5, 0.5), (4, 0.51, 0.5), (4, 0.52, 0.5), (4, 0.53, 0.5), (0, 0, 0)]).isEmpty)
+        #expect(Self.run([(4, 0.5, 0.5), (4, 0.53, 0.53), (4, 0.55, 0.55), (4, 0.56, 0.56), (0, 0, 0)]).isEmpty)
     }
 
     @Test("SWIPE-02 A finger lifting before the swipe aborts it")
     func abortEarly() {
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.5, 0.52), (2, 0.5, 0.52), (3, 0.5, 0.6), (0, 0, 0)]).isEmpty)
+        #expect(Self.run([(4, 0.5, 0.5), (4, 0.5, 0.52), (2, 0.5, 0.52), (3, 0.5, 0.6), (0, 0, 0)]).isEmpty)
     }
 
     @Test("SWIPE-01 After firing, the rest of the touch-down is quiet, then the next fires")
@@ -70,6 +86,13 @@ import AppKit
         let events = Self.run([(4, 0.5, 0.5), (4, 0.5, 0.55), (4, 0.5, 0.6), (4, 0.5, 0.9), (0, 0, 0),
                                (4, 0.5, 0.5), (4, 0.48, 0.5), (4, 0.45, 0.5), (4, 0.42, 0.5), (0, 0, 0)])
         #expect(events == [Self.swipe(4, .up), Self.swipe(4, .left)])
+    }
+
+    @Test("SWIPE-01 Fingers left on the pad after a swipe don't pan")
+    func noPanAfterSwipe() {
+        // The swipe fired: dropping to three fingers mid-arc doesn't restart as a pan.
+        #expect(Self.run([(4, 0.5, 0.5), (4, 0.5, 0.55), (4, 0.5, 0.6), (4, 0.5, 0.9),
+                          (3, 0.5, 0.9), (3, 0.5, 0.8), (0, 0, 0)]) == [Self.swipe(4, .up)])
     }
 
     @Test("SWIPE-03 Off, every frame is dropped and a gesture under way forgotten")

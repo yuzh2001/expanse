@@ -47,7 +47,7 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         var wallpaper = false
         var names = false
         var rows = false
-        /// Three- and four-finger swipes on the trackpad.
+        /// Three-finger pans and four-finger swipes on the trackpad.
         var gestures = true
         var corner = HotCorner.Corner.all
         /// Asked of macOS as the panel opens (see MenuPanel.show), not on every refresh: each is a

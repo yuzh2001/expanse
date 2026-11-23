@@ -4,11 +4,14 @@ What we might build next. New requests go in as they come up, and finished work 
 
 ## Not released yet
 
-- Trackpad swipes move around like the keys do: three fingers hop to the next window that way
-  (⌃ + arrow), four fingers up opens or leaves the canvas (⌥`). Raw touches come through the
-  private MultitouchSupport framework — no permission needed, nothing swallowed — so macOS's own
-  swipes for the same finger counts still fire too, and want turning off in Trackpad settings.
-  On by default, with a switch in the menu bar panel.
+- Trackpad gestures move around like a scroll does: three fingers drag the canvas, anywhere
+  and at 100% too (as ⌃⌥ + scroll does, opening it first), and a beat of stillness goes to
+  the window under the mouse; four fingers up opens or leaves it (⌥`), four fingers down
+  goes to the window under the mouse. A swipe's fingers finishing their arc — or the momentum a fast flick leaves — don't
+  scroll. Raw touches come through the private MultitouchSupport framework — no permission
+  needed, nothing swallowed — so macOS's own swipes for the same finger counts still fire
+  too, and want turning off in Trackpad settings. On by default, with a switch in the menu
+  bar panel.
 - ⌃⌥ + scroll moves the canvas from anywhere, over a window too (NAV-66): the rest of the
   gesture pans the view, ⌃⌥ held or not, and a flick ends snapped as usual. The app under the
   pointer gets none of it: an event tap takes each scroll before it can reach any app

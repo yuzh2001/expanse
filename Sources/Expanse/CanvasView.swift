@@ -489,6 +489,11 @@ final class CanvasView: NSView {
         flip(convert(e.locationInWindow, from: nil))
     }
 
+    /// The mouse in top-left view coordinates, without an event (see point(_:)).
+    func mousePoint() -> CGPoint {
+        flip(convert(window?.mouseLocationOutsideOfEventStream ?? .zero, from: nil))
+    }
+
     private func minimapPoint(_ e: NSEvent) -> CGPoint? {
         guard let root = layer else { return nil }
         let p = minimap.convert(convert(e.locationInWindow, from: nil), from: root)
