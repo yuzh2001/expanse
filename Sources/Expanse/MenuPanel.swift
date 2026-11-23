@@ -8,7 +8,7 @@ import SwiftUI
 final class MenuPanel: NSObject, NSWindowDelegate {
     enum Action {
         case toggleCanvas, setPaused(Bool), centreWindow, tidy, restoreAll, restoreLayout(URL), takeSnapshot
-        case autoCentre(Bool), wallpaper(Bool), names(Bool), corner(HotCorner.Corner), rows(Bool)
+        case autoCentre(Bool), wallpaper(Bool), names(Bool), corner(HotCorner.Corner), rows(Bool), gestures(Bool)
         case grantAccessibility, grantScreenRecording, installUpdate
         case detailedLogging(Bool), copyLogs, showLogFile, reportIssue
         case openAtLogin(Bool), gap(CGFloat), motion(String), automaticUpdates(Bool), checkForUpdates
@@ -20,7 +20,7 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         var closesPanel: Bool {
             switch self {
             case .setPaused, .autoCentre, .wallpaper, .names, .corner, .detailedLogging, .takeSnapshot,
-                 .openAtLogin, .gap, .motion, .automaticUpdates, .rows, .floatRules: false
+                 .openAtLogin, .gap, .motion, .automaticUpdates, .rows, .floatRules, .gestures: false
             default: true
             }
         }
@@ -47,6 +47,8 @@ final class MenuPanel: NSObject, NSWindowDelegate {
         var wallpaper = false
         var names = false
         var rows = false
+        /// Three- and four-finger swipes on the trackpad.
+        var gestures = true
         var corner = HotCorner.Corner.all
         /// Asked of macOS as the panel opens (see MenuPanel.show), not on every refresh: each is a
         /// round trip to it.
@@ -516,6 +518,7 @@ private struct PanelView: View {
             }
             .buttonStyle(PressStyle())
             .help("Apps whose new windows float over your work instead of joining the layout")
+            SwitchRow(title: "Trackpad gestures", isOn: binding(state.gestures) { .gestures($0) })
         }
         .padding(.vertical, 4)
         .card()

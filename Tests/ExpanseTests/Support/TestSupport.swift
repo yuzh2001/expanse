@@ -12,6 +12,8 @@ enum Env {
     @discardableResult
     static func isolate() -> URL {
         _ = NSApplication.shared
+        // Ordered-in overlays would sit on the main display otherwise: keep them off it.
+        CanvasController.overlayOffset = 20_000
         let dir = tempFolder()
         LayoutStore.folderOverride = dir
         return dir

@@ -71,6 +71,8 @@ A short walkthrough gets you set up in about a minute:
 | Rest the pointer in a screen corner, or press <kbd>⌥</kbd> <kbd>`</kbd> | Zoom out to every window (do it again to go back) |
 | Click a window | Glide to it (and the windows grouped with it) and start using it |
 | <kbd>⌃</kbd> + <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Hop to the next window in that direction |
+| Swipe with three fingers | Hop to the next window that way (macOS's own swipes for it off) |
+| Swipe up with four fingers | Zoom out to every window, and back (as <kbd>⌥</kbd> <kbd>`</kbd>) |
 | Pinch, or scroll with two fingers | Zoom and move around the canvas |
 | Drag a window while zoomed out | Move it; it snaps into place |
 | <kbd>T</kbd> | Tidy up: each group of windows lined up and evenly spaced, where it is |

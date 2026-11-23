@@ -115,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func copyLogs() {
         let c = controller
         BugReport.copy(settings: [
-            "Canvas: \(c.windows.count) windows, \(c.isPaused ? "paused" : "running"), auto-centre \(c.autoCentre ? "on" : "off"), arrange in rows \(c.rowsMode ? "on" : "off"), hot corner \(c.hotCorner.corner.title)",
+            "Canvas: \(c.windows.count) windows, \(c.isPaused ? "paused" : "running"), auto-centre \(c.autoCentre ? "on" : "off"), arrange in rows \(c.rowsMode ? "on" : "off"), trackpad gestures \(c.gesturesEnabled ? "on" : "off"), hot corner \(c.hotCorner.corner.title)",
             "Desktop picture background \(Wallpaper.enabled ? "on" : "off"), window names \(CanvasView.showsNames ? "shown" : "hidden"), detailed logging \(LogFile.shared.isEnabled ? "on" : "off"), low motion \(CanvasController.lowMotion ? "on" : "off")",
         ])
     }
@@ -352,7 +352,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return MenuPanel.State(isOn: isOn, isPaused: c.isPaused, isActive: c.isActive,
                                windows: c.windows.map(\.canvasFrame), viewport: c.visibleCanvas,
                                autoCentre: c.autoCentre, wallpaper: Wallpaper.enabled, names: CanvasView.showsNames,
-                               rows: c.rowsMode,
+                               rows: c.rowsMode, gestures: c.gesturesEnabled,
                                corner: c.hotCorner.corner,
                                update: Updater.shared.ready?.release.version,
                                detailedLogging: LogFile.shared.isEnabled,
@@ -381,6 +381,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .autoCentre(let on): controller.autoCentre = on
         case .rows(let on): controller.rowsMode = on
         case .floatRules(let rules): WindowRules.rules = rules
+        case .gestures(let on): controller.gesturesEnabled = on
         case .wallpaper(let on):
             Wallpaper.enabled = on
             controller.refreshWallpaper()

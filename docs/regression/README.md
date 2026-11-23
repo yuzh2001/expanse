@@ -25,7 +25,8 @@ app (see Running them).
 | [SEC](security.md) | Security hardening | 30 | 25 |
 | [ROWS](rows.md) | Rows layout | 15 | 1 |
 | [FLOAT](floating.md) | Floating windows | 5 | 0 |
-| | **Total** | **514** | **217** |
+| [SWIPE](gestures.md) | Trackpad gestures | 3 | 2 |
+| | **Total** | **517** | **219** |
 
 [Coverage](coverage.md) lists every commit with the cases that test it, or why none does (docs
 only, a reverted experiment, an empty merge, a release commit).
