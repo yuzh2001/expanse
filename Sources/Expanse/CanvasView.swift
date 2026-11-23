@@ -868,11 +868,20 @@ final class CanvasView: NSView {
 
     /// Zoomed out: a window's sizes, or on empty canvas, what you can do with it all.
     override func menu(for e: NSEvent) -> NSMenu? {
-        guard controller.isActive, !controller.gliding, tool == nil else { return nil }
+        guard controller.isActive, !controller.gliding, tool == nil,
+              !Self.isPlainClick(type: e.type, flags: e.modifierFlags) else { return nil }
         sizing = nil
         let p = point(e)
         guard let w = controller.window(atView: p) else { return canvasMenu(at: controller.camera.toCanvas(p)) }
         return windowMenu(w)
+    }
+
+    /// A left click with ⌃⌥ held is a click, not AppKit's ⌃-click for the menu: ⌃⌥ + scroll
+    /// pans the canvas from anywhere (NAV-66), and clicking a window with the keys still down
+    /// goes into it. With no menu, AppKit sends it on to mouseDown, which (like mouseUp) doesn't
+    /// look at ⌃ or ⌥. ⌃ alone, and a real right click, still bring up the menu.
+    static func isPlainClick(type: NSEvent.EventType, flags: NSEvent.ModifierFlags) -> Bool {
+        type == .leftMouseDown && flags.contains([.control, .option])
     }
 
     private func windowMenu(_ w: ManagedWindow) -> NSMenu {

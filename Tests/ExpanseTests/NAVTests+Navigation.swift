@@ -588,3 +588,42 @@ extension NAVTests {
         #expect(!ScrollTap.takes(scrollPhase: 1, momentumPhase: 0, flags: ctrlOpt.union(.maskCommand), taking: false))
     }
 }
+
+extension NAVTests {
+    @Test("NAV-68 ⌃⌥ + click on a window goes into it, no menu")
+    func nav68() {
+        // The predicate: a left click with ⌃⌥ (more keys too) is a click; ⌃ alone, or a right
+        // click with anything held, is the menu's.
+        #expect(CanvasView.isPlainClick(type: .leftMouseDown, flags: [.control, .option]))
+        #expect(CanvasView.isPlainClick(type: .leftMouseDown, flags: [.control, .option, .shift]))
+        #expect(!CanvasView.isPlainClick(type: .leftMouseDown, flags: [.control]))
+        #expect(!CanvasView.isPlainClick(type: .rightMouseDown, flags: [.control, .option]))
+        #expect(!CanvasView.isPlainClick(type: .rightMouseDown, flags: []))
+
+        // On the canvas, at 100% after a ⌃⌥ scroll, over a window.
+        let w = Fake.window(id: 1, canvas: CGRect(x: 0, y: 0, width: 400, height: 300))
+        let c = TestCanvas.make(windows: [w])
+        c.camera = Camera(origin: CGPoint(x: -100, y: -100), scale: 1)
+        c.isActive = true
+        c.view.addNode(w.node)
+        c.view.render()
+        let p = c.camera.toView(CGPoint(x: 200, y: 150))
+        func mouse(_ type: NSEvent.EventType, _ flags: NSEvent.ModifierFlags) -> NSEvent {
+            NSEvent.mouseEvent(with: type, location: NSPoint(x: p.x, y: c.view.bounds.height - p.y), modifierFlags: flags,
+                               timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        }
+        #expect(c.view.menu(for: mouse(.leftMouseDown, [.control, .option])) == nil)
+        #expect(c.view.menu(for: mouse(.leftMouseDown, [.control])) != nil)
+        #expect(c.view.menu(for: mouse(.rightMouseDown, [.control, .option])) != nil)
+        #expect(c.view.menu(for: mouse(.rightMouseDown, [])) != nil)
+        // AppKit then hands it to mouseDown, which takes it as a plain click: the window, ready
+        // to go into it when you let go (letting go would dive into it, which needs a real Mac).
+        c.view.mouseDown(with: mouse(.leftMouseDown, [.control, .option]))
+        guard case .window(let clicked, _, _) = c.view.drag else {
+            Issue.record("a ⌃⌥ click isn't a click on the window: \(c.view.drag)")
+            return
+        }
+        #expect(clicked === w)
+        #expect(c.view.selected.isEmpty)
+    }
+}

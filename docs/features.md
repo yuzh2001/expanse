@@ -9,6 +9,9 @@ What we might build next. New requests go in as they come up, and finished work 
   pointer gets none of it: an event tap takes each scroll before it can reach any app
   (Accessibility, which Expanse already needs). Before, a scroll only opened the canvas over the
   bare desktop.
+- ⌃⌥ + click on a window goes into it (NAV-68), so after a ⌃⌥ scroll you can click with the keys
+  still down. Before, AppKit took it for a ⌃-click and showed the window's menu; ⌃-click alone and
+  right-click still do.
 
 ## Bugs
 

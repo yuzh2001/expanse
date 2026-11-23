@@ -1,6 +1,6 @@
 # Regression tests
 
-Every feature Expanse has, and every bug it has fixed, as a test case: 487 cases, from all 174
+Every feature Expanse has, and every bug it has fixed, as a test case: 488 cases, from all 174
 commits from 0.1.0 to 0.1.34 (26–30 Oct 2026) and the changes since. A bug fix's case says what
 went wrong **before** the fix and what must happen **now**, so a later change can't quietly bring
 it back. Every case has a test: unit tests for the logic, and end-to-end cases that drive the real
@@ -8,7 +8,7 @@ app (see Running them).
 
 | Area | What it covers | Cases | Bug fixes |
 |---|---|---|---|
-| [NAV](navigation.md) | Canvas, zoom and navigation | 66 | 15 |
+| [NAV](navigation.md) | Canvas, zoom and navigation | 67 | 15 |
 | [EDIT](arranging.md) | Arranging windows on the canvas, and screens you build | 35 | 4 |
 | [PLACE](new-windows.md) | New windows and where they go | 19 | 13 |
 | [TRACK](tracking.md) | Finding and following windows | 47 | 32 |
@@ -23,7 +23,7 @@ app (see Running them).
 | [UPDATE](updates-and-install.md) | Updates, release builds and install | 19 | 2 |
 | [URL](url-scripting.md) | expanse:// scripting | 28 | 1 |
 | [SEC](security.md) | Security hardening | 30 | 25 |
-| | **Total** | **487** | **210** |
+| | **Total** | **488** | **210** |
 
 [Coverage](coverage.md) lists every commit with the cases that test it, or why none does (docs
 only, a reverted experiment, an empty merge, a release commit).
@@ -34,7 +34,7 @@ Every case has a test (`scripts/test-coverage.sh` checks it): a unit test for ea
 **unit**, and an end-to-end case, a unit test of its logic, or both, for each case marked
 **manual**. A test's name starts with its case's ID.
 
-**Unit tests** (Tests/ExpanseTests, 590 of them, about a minute and a half). Run them before every commit:
+**Unit tests** (Tests/ExpanseTests, 591 of them, about a minute and a half). Run them before every commit:
 ```bash
 scripts/test.sh
 ```

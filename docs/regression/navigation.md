@@ -762,3 +762,14 @@
   3. Back to 100%, then scroll with ⌘⌃⌥ held, or with only ⌃ or only ⌥.
 - **Expected:** Steps 1 and 2 open the canvas at 100% and the rest of the gesture moves the view, ⌃⌥ held or not; when it ends the view snaps as in NAV-51, so a flick ends with no window cut off and a slow drag stays where you left it. The app under the pointer gets none of the gesture: an event tap takes each scroll before it can reach any app (Accessibility, which Expanse already needs, is what lets it). Step 3 does nothing new: the scroll goes to the window under the pointer, as before (NAV-18).
 - **Automate:** unit: `scrollTakesOverAnywhere(_:)` and `ScrollTap.takes(scrollPhase:momentumPhase:flags:taking:)`; manual for the gesture itself (the event tap swallows it; the monitors' `handleDesktopGesture` branch is the fallback when there's no tap).
+
+## NAV-68 ⌃⌥ + click on a window goes into it, no menu
+- **Type:** Feature
+- **Area:** NAV
+- **Commits:** unreleased (23 Nov)
+- **Setup:** At 100% with several windows, the pointer over one.
+- **Steps:**
+  1. Hold ⌃⌥ and scroll (NAV-66) so the canvas opens, then, still holding ⌃⌥, click a window.
+  2. On the canvas again, ⌃-click a window (⌃ alone), and right-click one with and without ⌃⌥.
+- **Expected:** Step 1 goes into the window, as a plain click does: no "Fill screen, Half screen…" menu. Step 2 shows the window's menu each time, as before. At 100% with the canvas not up, a ⌃-click on a real window is that app's, as before.
+- **Automate:** unit: `CanvasView.isPlainClick(type:flags:)`, `menu(for:)` gives no menu for a ⌃⌥ left click and does for the rest, and `mouseDown` with ⌃⌥ takes the window as a plain click does; manual for AppKit handing the click on to `mouseDown` once there's no menu.
