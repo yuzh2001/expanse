@@ -503,3 +503,15 @@
 - **Expected:** No "bypass the system private window picker" alert. Quitting takes at most a second longer, only while a request is under way.
 - **Automate:** unit: `applicationShouldTerminate` answers `.terminateLater` while `WindowCapture.unanswered` > 0, asks for nothing new meanwhile, and lets the quit go on once it's answered, or after a second; end-to-end: TRACK-11 then TRACK-12 with no prompt.
 - **Note:** The wait first hung Ctrl-C and kill (PERSIST-05 caught it before a release): the signal handler is a block on the main queue, and AppKit's wait for the reply ran inside it, where nothing else on the main queue runs. The handler now quits from the run loop, and the wait uses a timer in the common modes.
+
+## CAPTURE-41 Live pictures have the real windows' colours
+- **Type:** Bug fix
+- **Area:** CAPTURE
+- **Commits:** unreleased (23 Nov)
+- **Before:** Pictures of windows on the canvas were slightly off in colour next to the real windows (seen on a MacBook's Display P3 screen). Capture asked for no colour space, so ScreenCaptureKit used a display's, and the surface Core Animation drew could carry no tag saying which, so it wasn't matched to the screen it was drawn on.
+- **Setup:** Windows with strong colours (a photo, a page with saturated red, green and blue) on the canvas, ideally on a Display P3 screen and on an sRGB external one.
+- **Steps:**
+  1. Zoom out (⌥`) and compare a window's picture with the window itself (go into it, or take a screenshot of each).
+  2. With two displays, open the canvas on the other one and compare again.
+- **Expected:** The picture's colours match the window's on every screen; reds and greens aren't duller or brighter.
+- **Automate:** unit: `WindowCapture.configuration` asks for Display P3 (streams and snapshots alike), and `deliver` tags an untagged frame's surface with it (`tagColourSpace`), keeping a tag the buffer already has; manual for the colours themselves.

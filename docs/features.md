@@ -16,6 +16,9 @@ What we might build next. New requests go in as they come up, and finished work 
 - Windows centre and size in the work area above the Dock (SIZE-21): with the Dock always shown,
   a centred window's bottom clears it and one as big as the work area no longer runs under it;
   part of a window under the Dock counts as cut off. With the Dock on the right it holds sideways.
+- Window pictures on the canvas have the real windows' colours (CAPTURE-41): they're captured in
+  Display P3 and say so, so they're matched to whichever screen shows them. Before, they were
+  slightly off.
 
 ## Bugs
 
