@@ -146,8 +146,7 @@ final class CanvasView: NSView {
         for l in [world, labels, guides, marquee, selectionBox, groupOutline, toolSlots, dropScreen, dropSlot] { l.frame = bounds }
         // Pinned exactly where the real desktop picture is: the top strip sits under the menu bar.
         wallpaper.frame = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height + menuBarHeight)
-        minimapGlass.frame = CGRect(origin: CGPoint(x: bounds.maxX - Minimap.size.width - 16, y: 16), size: Minimap.size)
-        placeSpacesBar()
+        placePanels()
         CATransaction.commit()
         render()
     }
@@ -185,8 +184,38 @@ final class CanvasView: NSView {
 
     private func placeSpacesBar() {
         spacesGlass.isHidden = spacesBar.isHidden
-        spacesGlass.frame = CGRect(x: minimapGlass.frame.minX - 12 - spacesBar.bounds.width, y: 16,
+        spacesGlass.frame = CGRect(x: minimapGlass.frame.minX - 12 - spacesBar.bounds.width,
+                                   y: minimapGlass.frame.minY,
                                    width: spacesBar.bounds.width, height: spacesBar.bounds.height)
+    }
+
+    /// Where the minimap sits for the current mode: full size over the canvas, or at 100% a
+    /// strip-tall compact one in the strip below the work area (an always-shown Dock's), centred
+    /// in it where windows don't reach — hugging the corner when there's no strip.
+    private func minimapFrame() -> CGRect {
+        guard let c = controller, !c.isActive else {
+            return CGRect(x: bounds.maxX - Minimap.size.width - 16, y: 16,
+                          width: Minimap.size.width, height: Minimap.size.height)
+        }
+        let strip = c.bottomStrip
+        let height: CGFloat = strip >= 44 ? min(56, strip - 8) : 44
+        let bottom: CGFloat = strip >= height ? (strip - height) / 2 : 8
+        return CGRect(x: bounds.maxX - (3.2 * height).rounded() - 16, y: bottom,
+                      width: (3.2 * height).rounded(), height: height)
+    }
+
+    /// The minimap and the Spaces panel at their mode's size and place (see minimapFrame); the
+    /// Spaces panel's tiles shrink to match (see SpacesBar.setCompact).
+    private func placePanels() {
+        let frame = minimapFrame()
+        let compact = frame.size != Minimap.size
+        minimap.setCompact(compact, size: frame.size)
+        spacesBar.setCompact(compact, height: frame.height)
+        let radius = compact ? frame.height / 3 : GlassPanel.radius
+        minimapGlass.setRadius(radius)
+        spacesGlass.setRadius(radius)
+        minimapGlass.frame = frame
+        placeSpacesBar()
     }
 
     func setWallpaper(_ image: CGImage?) {
@@ -265,6 +294,9 @@ final class CanvasView: NSView {
         guard let c = controller else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        // Entering or leaving the canvas, or a Dock appearing, moves the minimap between its
+        // two sizes: the frame it should have changes without a resize.
+        if minimapGlass.frame != minimapFrame() { placePanels() }
         labels.isHidden = !Self.showsNames
         // At 100% the real desktop shows through (see OverlayWindow.backdropLevel); the canvas, and
         // a glide across it, draw their own copy of it.

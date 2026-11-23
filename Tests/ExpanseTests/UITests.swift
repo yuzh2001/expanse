@@ -123,6 +123,9 @@ import SwiftUI
         let a = Fake.window(id: 1, canvas: CGRect(x: 0, y: 0, width: 800, height: 600))
         let b = Fake.window(id: 2, canvas: CGRect(x: 2000, y: 900, width: 600, height: 400))
         let c = Self.canvas(windows: [a, b])
+        // Zoomed out, it's the full panel (at 100% it's compact, see UI-43).
+        c.isActive = true
+        c.view.render()
         let v = c.view
         // 16pt in from the bottom-right corner.
         #expect(v.minimapGlass.frame == CGRect(x: v.bounds.maxX - Minimap.size.width - 16, y: 16,
@@ -720,10 +723,11 @@ import SwiftUI
     @Test("UI-40 A sliver at the screen's edge doesn't cover the minimap or Spaces panel") func ui40() {
         let c = Self.canvas()
         let vp = c.viewport
-        // Where the minimap is, in global coordinates (top-left origin).
+        // Where the minimap is, in global coordinates (top-left origin): at 100% it's the
+        // compact panel, 44pt tall 8pt off the corner with no Dock strip (see UI-43).
         let panels = c.view.panelsFrame.offsetBy(dx: vp.minX, dy: vp.minY)
-        #expect(panels == CGRect(x: vp.maxX - 16 - Minimap.size.width, y: vp.maxY - 16 - Minimap.size.height,
-                                 width: Minimap.size.width, height: Minimap.size.height))
+        #expect(panels == CGRect(x: vp.maxX - 16 - 141, y: vp.maxY - 8 - 44,
+                                 width: 141, height: 44))
         let size = CGSize(width: 900, height: 500)
         // 120pt showing at the right edge, level with the minimap: stays parked.
         let low = CGRect(origin: CGPoint(x: vp.maxX - 120, y: vp.maxY - 450), size: size)
@@ -743,7 +747,7 @@ import SwiftUI
         let both = c.view.panelsFrame.offsetBy(dx: vp.minX, dy: vp.minY)
         #expect(both.width > panels.width)
         // 100pt of its top showing at the bottom, over the Spaces panel but clear of the minimap.
-        let bottom = CGRect(x: both.minX + 20, y: vp.maxY - 100, width: 300, height: 500)
+        let bottom = CGRect(x: both.minX + 20, y: vp.maxY - 100, width: 150, height: 500)
         #expect(!bottom.intersection(vp).intersects(panels))
         #expect(!CanvasController.goesOnScreen(bottom, in: vp, panels: both))
         #expect(!c.goesOnScreen(bottom, in: vp))
@@ -769,5 +773,40 @@ import SwiftUI
         #expect(level([dock]) == nil)
         #expect(level([w(403, layer: 8, CGRect(x: 0, y: 0, width: 1600, height: 600))]) == 8, "a wide dialog that doesn't cover the screen")
         #expect(level([w(404, layer: 8, CGRect(x: 600, y: 300, width: 400, height: 200), alpha: 0)]) == nil, "an invisible one")
+    }
+
+    // MARK: UI-43
+
+    @Test("UI-43 At 100% the minimap is a compact panel in the Dock's strip") func ui43() {
+        // A 65pt Dock at the bottom: at 100% the panel is 56 tall, centred in the strip.
+        let c = TestCanvas.make(display: TestDisplay(dockBottom: 65),
+                                windows: [Fake.window(id: 1, canvas: CGRect(x: 0, y: 0, width: 600, height: 400))])
+        c.view.layoutSubtreeIfNeeded()
+        let v = c.view
+        #expect(c.bottomStrip == 65)
+        #expect(v.minimapGlass.frame == CGRect(x: v.bounds.maxX - 179 - 16, y: (65 - 56) / 2,
+                                               width: 179, height: 56))
+        #expect(v.minimap.compact && v.minimap.zoomText.isHidden)
+        // The Spaces panel beside it shrinks to the same height, its tiles keeping their shape.
+        v.updateSpaces(Self.spaces(3), active: 100)
+        v.layoutSubtreeIfNeeded()
+        #expect(v.spacesGlass.frame.minY == v.minimapGlass.frame.minY)
+        #expect(v.spacesGlass.frame.height == 56 && v.spacesBar.tileFrames.first?.height == 44)
+        // What the sliver rule shields follows the glass: the compact strip, bottom right.
+        #expect(v.panelsFrame == CGRect(x: v.spacesGlass.frame.minX, y: v.bounds.height - 4.5 - 56,
+                                        width: 179 + 12 + v.spacesGlass.frame.width, height: 56))
+        // Back over the canvas: the full panel, header and all, as ever.
+        c.isActive = true
+        v.render()
+        #expect(v.minimapGlass.frame == CGRect(x: v.bounds.maxX - Minimap.size.width - 16, y: 16,
+                                               width: Minimap.size.width, height: Minimap.size.height))
+        #expect(!v.minimap.compact && !v.minimap.zoomText.isHidden)
+        // And at 100% with no Dock strip at all: 44 tall, 8pt off the corner.
+        c.isActive = false
+        c.displayOverride = (TestDisplay.laptop.frame, TestDisplay.laptop.usable)
+        c.updateOverlayFrame()
+        v.layoutSubtreeIfNeeded()
+        v.render()
+        #expect(v.minimapGlass.frame == CGRect(x: v.bounds.maxX - 141 - 16, y: 8, width: 141, height: 44))
     }
 }

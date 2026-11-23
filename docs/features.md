@@ -31,6 +31,9 @@ What we might build next. New requests go in as they come up, and finished work 
   into a row shoves the windows to its right; above or below every row a new one opens; right of
   the rows an unsorted grid packs the rest, new windows included. Windows already in bands go
   into rows when it's turned on; turning it off leaves everything where it is.
+- At 100% the minimap is a small panel in the Dock's strip at the bottom-right (UI-43): as tall
+  as the strip allows, the Spaces panel's tiles shrunk to match, where working windows don't
+  reach. Before it kept its canvas size and they covered most of it; zoomed out it's unchanged.
 
 ## Bugs
 

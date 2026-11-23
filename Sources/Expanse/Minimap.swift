@@ -15,7 +15,11 @@ final class Minimap: CALayer {
     private var accentRing: CGColor?
     private var quietRing: CGColor?
     private let zoomText = CATextLayer()
-    private let mapArea: CGRect
+    private var mapArea: CGRect
+    /// The small live-desktop look (see setCompact): no header row, the map filling the panel.
+    private(set) var compact = false
+    /// What update last drew, for drawing it again at the other size.
+    private var lastUpdate: (windows: [CGRect], viewport: CGRect, scale: CGFloat)?
 
     /// Canvas -> minimap (bottom-left layer coords) mapping from the last update.
     private var mapScale: CGFloat = 1
@@ -54,6 +58,23 @@ final class Minimap: CALayer {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Compact at 100% (the live desktop): a small panel in the Dock's strip — no title or zoom,
+    /// the map filling it — or back to the full panel over the canvas, header row and all. The
+    /// drawing follows the mode at once.
+    func setCompact(_ compact: Bool, size: CGSize) {
+        guard compact != self.compact || bounds.size != size else { return }
+        self.compact = compact
+        bounds = CGRect(origin: .zero, size: size)
+        mapArea = compact
+            ? CGRect(x: 6, y: 6, width: size.width - 12, height: size.height - 12)
+            : CGRect(x: 14, y: 12, width: size.width - 28, height: size.height - 44)
+        title.isHidden = compact
+        zoomText.isHidden = compact
+        // The cached window path was for the other size.
+        drawn = nil
+        if let lastUpdate { update(windows: lastUpdate.windows, viewport: lastUpdate.viewport, scale: lastUpdate.scale) }
+    }
+
     func setContentsScale(_ s: CGFloat) {
         contentsScale = s
         title.contentsScale = s
@@ -87,6 +108,7 @@ final class Minimap: CALayer {
 
     /// All rects are canvas space (top-left origin).
     func update(windows: [CGRect], viewport: CGRect, scale: CGFloat) {
+        lastUpdate = (windows, viewport, scale)
         var bounds = windows.reduce(viewport) { $0.union($1) }
         bounds = bounds.insetBy(dx: -bounds.width * 0.04, dy: -bounds.height * 0.04)
         // Room all round for the viewport's ring, drawn outside it (below).

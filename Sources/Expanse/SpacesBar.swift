@@ -24,6 +24,17 @@ final class SpacesBar: CALayer {
     private let heading = CATextLayer()
     private var scale: CGFloat = 2
     private var appearance = NSAppearance(named: .darkAqua)!
+    /// The compact look at 100%, level with the compact minimap (see setCompact): smaller tiles
+    /// in the same screen shape, no heading or names.
+    private var compact = false
+    private var panelHeight = Minimap.size.height
+
+    private var inset: CGFloat { compact ? 6 : Self.inset }
+    private var tileGap: CGFloat { compact ? 8 : Self.gap }
+    private var tileSize: CGSize {
+        compact ? CGSize(width: ((panelHeight - 12) * 100 / 63).rounded(), height: panelHeight - 12)
+                : Self.tile
+    }
     /// The tile under the pointer.
     var hovered: Int? {
         didSet { if hovered != oldValue { styleTiles() } }
@@ -64,14 +75,30 @@ final class SpacesBar: CALayer {
         self.wallpaper = wallpaper
         self.pictures = pictures
         isHidden = spaces.count < 2
+        rebuild()
+    }
+
+    /// Compact at 100%, level with the compact minimap: tiles as tall as it lets them be, their
+    /// screen shape kept. `height`: the minimap's own.
+    func setCompact(_ compact: Bool, height: CGFloat) {
+        let h = compact ? height : Minimap.size.height
+        guard compact != self.compact || h != panelHeight else { return }
+        self.compact = compact
+        panelHeight = h
+        rebuild()
+    }
+
+    /// Lays out tiles, rings, labels and the heading for the current mode.
+    private func rebuild() {
         (tiles + rings + labels).forEach { $0.removeFromSuperlayer() }
         tiles = spaces.enumerated().map { makeTile($1, at: $0) }
         rings = tiles.map(makeRing)
         labels = spaces.enumerated().map { makeLabel($1, under: tiles[$0]) }
         (tiles + rings + labels).forEach(addSublayer)
-        let width = Self.inset * 2 + CGFloat(spaces.count) * (Self.tile.width + Self.gap) - Self.gap
-        bounds = CGRect(x: 0, y: 0, width: width, height: Minimap.size.height)
-        heading.frame = CGRect(x: Self.inset, y: Minimap.size.height - 25, width: 120, height: 14)
+        let width = inset * 2 + CGFloat(spaces.count) * (tileSize.width + tileGap) - tileGap
+        bounds = CGRect(x: 0, y: 0, width: width, height: panelHeight)
+        heading.isHidden = compact
+        heading.frame = CGRect(x: inset, y: panelHeight - 25, width: 120, height: 14)
         styleTiles()
     }
 
@@ -86,10 +113,11 @@ final class SpacesBar: CALayer {
 
     private func makeTile(_ space: Spaces.Space, at i: Int) -> CALayer {
         let tile = CALayer()
-        tile.frame = CGRect(x: Self.inset + CGFloat(i) * (Self.tile.width + Self.gap), y: 36,
-                            width: Self.tile.width, height: Self.tile.height)
+        tile.frame = CGRect(origin: CGPoint(x: inset + CGFloat(i) * (tileSize.width + tileGap),
+                                            y: compact ? inset : 36),
+                            size: tileSize)
         // Concentric with the panel's corners.
-        tile.cornerRadius = GlassPanel.radius - Self.inset
+        tile.cornerRadius = compact ? 4 : GlassPanel.radius - Self.inset
         tile.cornerCurve = .continuous
         tile.masksToBounds = true
         if space.isDesktop {
@@ -104,11 +132,13 @@ final class SpacesBar: CALayer {
         } else if let pid = space.pid, let icon = NSRunningApplication(processIdentifier: pid)?.icon {
             // No picture yet: its icon (on a colour that suits the glass; see styleTiles).
             let image = CALayer()
+            let iconSide: CGFloat = compact ? tileSize.height - 8 : 36
             // At the size it's drawn, in pixels (the default is a small, blurry version).
-            var rect = CGRect(x: 0, y: 0, width: 36 * scale, height: 36 * scale)
+            var rect = CGRect(x: 0, y: 0, width: iconSide * scale, height: iconSide * scale)
             image.contents = icon.cgImage(forProposedRect: &rect, context: nil, hints: nil)
             image.contentsGravity = .resizeAspect
-            image.frame = CGRect(x: (Self.tile.width - 36) / 2, y: (Self.tile.height - 36) / 2, width: 36, height: 36)
+            image.frame = CGRect(x: (tileSize.width - iconSide) / 2, y: (tileSize.height - iconSide) / 2,
+                                 width: iconSide, height: iconSide)
             image.contentsScale = scale
             // Lifted off the well a little, like an icon in the Dock.
             image.shadowColor = NSColor.black.cgColor
@@ -138,7 +168,8 @@ final class SpacesBar: CALayer {
         label.alignmentMode = .center
         label.truncationMode = .end
         label.contentsScale = scale
-        label.frame = CGRect(x: tile.frame.minX - 2, y: 13, width: Self.tile.width + 4, height: 14)
+        label.isHidden = compact
+        label.frame = CGRect(x: tile.frame.minX - 2, y: 13, width: tileSize.width + 4, height: 14)
         return label
     }
 

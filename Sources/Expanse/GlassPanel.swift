@@ -7,6 +7,7 @@ final class GlassPanel: NSView {
     static let radius: CGFloat = 22
 
     private let host = Host()
+    private var effect: NSView?
 
     /// `appearanceChanged` gets the appearance the glass gives its content (light or dark text),
     /// at once and whenever it changes.
@@ -36,7 +37,18 @@ final class GlassPanel: NSView {
             effect = material
         }
         effect.autoresizingMask = [.width, .height]
+        self.effect = effect
         addSubview(effect)
+    }
+
+    /// The panel's corner radius: the full one by default, a smaller one for a compact panel
+    /// (see CanvasView.placePanels).
+    func setRadius(_ radius: CGFloat) {
+        if #available(macOS 26, *), let glass = effect as? NSGlassEffectView {
+            glass.cornerRadius = radius
+        } else {
+            effect?.layer?.cornerRadius = radius
+        }
     }
 
     required init?(coder: NSCoder) { fatalError() }

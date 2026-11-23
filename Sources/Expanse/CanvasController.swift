@@ -1520,6 +1520,10 @@ final class CanvasController: NSObject {
         usableRectCG.offsetBy(dx: -viewport.minX, dy: -viewport.minY)
     }
 
+    /// The strip the work area leaves at the bottom of the view (an always-shown Dock's, say):
+    /// where the compact minimap lives (see CanvasView.placePanels).
+    var bottomStrip: CGFloat { viewSize.height - workArea.maxY }
+
     /// The size of macOS's Fill on this usable area: it, or a little less all round ("Tiled windows
     /// have margins" in Desktop & Dock).
     static func fills(_ size: CGSize, usable: CGRect) -> Bool {

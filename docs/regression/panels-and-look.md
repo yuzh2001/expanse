@@ -508,3 +508,18 @@
   5. Click the gear, press Esc twice, and open the panel again.
 - **Expected:** Step 1: Settings takes the place of the panel's first page, in the same panel with its top where it was. The canvas stays zoomed out, and no window opens. Step 2: each pick takes at once, and the panel stays on the page. Step 3: back to the first page, still open, the panel grown to fit it with its top where it was. Step 4: the same. Step 5: the second Esc closes the panel, and it opens again on its first page.
 - **Automate:** unit: `escape()`, `Action.closesPanel`, `SettingsPage` and the picks through `AppDelegate.perform`; end-to-end.
+
+## UI-43 At 100% the minimap is a compact panel in the Dock's strip
+- **Type:** Bug fix
+- **Area:** UI
+- **Commits:** unreleased (23 Nov)
+- **Before:** The minimap kept its canvas size (208×136) at 100%: it sat on the backdrop where
+  working windows are, so they covered most of it.
+- **Now:** At 100% it's a small panel in the strip below the work area (an always-shown Dock's),
+  centred in it — 56 tall, or the strip less 8pt; with no strip, 44 tall 8pt off the corner.
+  No header row; the map fills it, windows and viewport outline as before, and clicking it zooms
+  out as before. The Spaces panel beside it shrinks to the same height, its tiles keeping their
+  screen shape. Zoomed out, both are exactly as they were.
+- **Automate:** unit: live mode places a 56×179 panel centred in a 65pt strip (44×141 at 8pt
+  with none), the Spaces panel level with it and `panelsFrame` matching; active mode the full
+  208×136.
