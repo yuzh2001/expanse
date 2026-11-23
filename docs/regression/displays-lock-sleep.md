@@ -388,3 +388,15 @@
   2. Look at the second display.
 - **Expected:** The window is parked at the bottom-left corner of the main display, only a pixel of it on screen; nothing shows on the other display. With no display covering the right corner (none, or displays on the left only), windows park at the bottom-right as before; with both covered, the right corner is used as before. A window parked before the arrangement changed is re-parked at the free corner by the relayout that follows it.
 - **Automate:** unit: `parkSide`/`parkPoint`/`parkingArea` (free corner chosen per arrangement; a nudged left-parked frame and a tall one moved to the top read as parked; a window on another display doesn't).
+
+## DISPLAY-31 A window that would straddle onto another display stays a picture on the main one
+- **Type:** Bug fix
+- **Area:** DISPLAY
+- **Commits:** unreleased (23 Nov)
+- **Before:** A window whose canvas spot was partly past the main display's edge, with another display there, was placed as a real window straddling both. macOS draws a window on one display only — the one with more of it — so the window showed on the other display alone, its main-display part not drawn, and it joined that display's Space (with "Displays have separate Spaces" on).
+- **Setup:** Two displays side by side ("Displays have separate Spaces" on), at 100%; a window whose canvas spot puts most of it past the shared edge.
+- **Steps:**
+  1. Scroll the canvas so the window's spot would straddle onto the second display.
+  2. Scroll it back so most of the spot is on the main display; click the window's picture.
+- **Expected:** Step 1: the window stays parked — a live picture of it shows at its canvas spot on the main display, nothing of it on the other. Step 2: mostly on main again, it comes back as a real window on its own; clicking the picture focuses and centres it.
+- **Automate:** unit: `goesOnScreen(_:in:panels:others:)` (at least as much on other displays keeps it parked) through `commitPlan`.

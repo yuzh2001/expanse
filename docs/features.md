@@ -22,6 +22,10 @@ What we might build next. New requests go in as they come up, and finished work 
 - ⌃⌥ + click on a window goes into it (NAV-68), so after a ⌃⌥ scroll you can click with the keys
   still down. Before, AppKit took it for a ⌃-click and showed the window's menu; ⌃-click alone and
   right-click still do.
+- A window that would straddle onto a second display stays a picture on the main one
+  (DISPLAY-31): macOS would draw it on just one display and it would join that display's Space.
+  Before, it was placed across both and showed on the other display alone. Mostly back on the
+  main display it returns as a real window by itself.
 
 ## Bugs
 

@@ -4590,15 +4590,24 @@ final class CanvasController: NSObject {
     /// a title bar above the menu bar (it would shove the window down), so one whose top is cut
     /// off stays parked, and the backdrop draws it where it belongs.
     private func goesOnScreen(_ r: CGRect, in vp: CGRect) -> Bool {
-        Self.goesOnScreen(r, in: vp, panels: view.panelsFrame.offsetBy(dx: vp.minX, dy: vp.minY))
+        Self.goesOnScreen(r, in: vp, panels: view.panelsFrame.offsetBy(dx: vp.minX, dy: vp.minY),
+                          others: otherDisplays)
     }
 
     /// `panels`: the minimap and the Spaces panel (global). A window peeking in at the edge of the
     /// screen, only a sliver of it showing, would cover them: it stays parked, and the backdrop
-    /// draws what shows of it around them, under them.
-    static func goesOnScreen(_ r: CGRect, in vp: CGRect, panels: CGRect) -> Bool {
+    /// draws what shows of it around them, under them. `others`: the other displays' frames. One
+    /// straddling onto another display is drawn on just one — macOS shows a window where more of
+    /// it is, and a window mostly on another display would join that display's Space: it stays
+    /// parked, and the backdrop draws its main-display part at its canvas spot.
+    static func goesOnScreen(_ r: CGRect, in vp: CGRect, panels: CGRect, others: [CGRect] = []) -> Bool {
         let visible = r.intersection(vp)
         guard r.minY >= vp.minY - 1, !visible.isNull, visible.width >= 48, visible.height >= 48 else { return false }
+        let onOthers = others.reduce(CGFloat(0)) { sum, o in
+            let i = r.intersection(o)
+            return sum + (i.isNull ? 0 : i.width * i.height)
+        }
+        guard onOthers < visible.width * visible.height else { return false }
         let sliver = visible.width < min(200, r.width / 3) || visible.height < min(200, r.height / 3)
         return !(sliver && visible.intersects(panels))
     }
