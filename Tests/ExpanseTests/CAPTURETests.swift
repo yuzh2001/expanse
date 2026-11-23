@@ -369,6 +369,38 @@ import ObjectiveC
         #expect(cap.recentSamples.count == 1)
     }
 
+    @Test("CAPTURE-41 Live pictures are captured in Display P3 and their surfaces say so")
+    func capture41() throws {
+        // Streams and snapshots share the configuration: both ask for Display P3, not "whatever
+        // the display is".
+        for fps in [1, 30] {
+            let config = WindowCapture.configuration(pixelSize: CGSize(width: 800, height: 500), fps: fps)
+            #expect(config.colorSpaceName == CGColorSpace.displayP3)
+        }
+        func tag(of surface: IOSurface) -> CFString? {
+            IOSurfaceCopyValue(surface, kIOSurfaceColorSpace).flatMap { CGColorSpace(propertyListPlist: $0)?.name }
+        }
+        // An untagged frame reaches the layer tagged with the colour space capture asked for.
+        let cap = WindowCapture()
+        var shown: IOSurface?
+        cap.onFrame = { shown = $0 }
+        let plain = picture()
+        let plainSurface = try #require(CVPixelBufferGetIOSurface(plain.imageBuffer!)?.takeUnretainedValue())
+        #expect(tag(of: plainSurface) == nil)
+        cap.deliver(plain, snapshot: false)
+        #expect(tag(of: try #require(shown)) == CGColorSpace.displayP3)
+        // A buffer that says what it is keeps that.
+        let srgb = picture()
+        let buffer = srgb.imageBuffer!
+        CVBufferSetAttachment(buffer, kCVImageBufferCGColorSpaceKey, CGColorSpace(name: CGColorSpace.sRGB)!, .shouldPropagate)
+        let srgbSurface = try #require(CVPixelBufferGetIOSurface(buffer)?.takeUnretainedValue())
+        WindowCapture.tagColourSpace(srgbSurface, of: buffer)
+        #expect(tag(of: srgbSurface) == CGColorSpace.sRGB)
+        // A surface already tagged is left as it is.
+        WindowCapture.tagColourSpace(plainSurface, of: buffer)
+        #expect(tag(of: plainSurface) == CGColorSpace.displayP3)
+    }
+
     // MARK: replayd
 
     @Test("CAPTURE-22 A snapshot replayd never answers gives up once after 5 s, never twice")

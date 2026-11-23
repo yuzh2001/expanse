@@ -272,6 +272,20 @@ final class WindowCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         notifyStopped()
     }
 
+    /// The colour space pictures are captured in (see configuration).
+    static let captureColourSpace = CGColorSpace.displayP3
+
+    /// Tag a frame's surface with its colour space if it carries none, so a layer showing it
+    /// colour-matches it to the screen rather than taking its pixels as the screen's own. The
+    /// pixel buffer's own tag if it has one, else the colour space capture asked for.
+    static func tagColourSpace(_ surface: IOSurface, of pixelBuffer: CVPixelBuffer) {
+        guard IOSurfaceCopyValue(surface, kIOSurfaceColorSpace) == nil,
+              let space = CVImageBufferGetColorSpace(pixelBuffer)?.takeUnretainedValue()
+                ?? CGColorSpace(name: captureColourSpace),
+              let plist = space.copyPropertyList() else { return }
+        IOSurfaceSetValue(surface, kIOSurfaceColorSpace, plist)
+    }
+
     static func configuration(pixelSize: CGSize, fps: Int) -> SCStreamConfiguration {
         let c = SCStreamConfiguration()
         // Within what a picture can be (the largest texture there is): a window's size comes from
@@ -281,6 +295,11 @@ final class WindowCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         c.height = pixels(pixelSize.height)
         c.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(max(1, fps)))
         c.pixelFormat = kCVPixelFormatType_32BGRA
+        // Left unset, the picture is in the colour space of whichever display ScreenCaptureKit
+        // picks, which needn't be the one the canvas draws it on. Display P3 holds everything an
+        // sRGB or P3 screen shows, and the surface says so (see tagColourSpace), so Core Animation
+        // matches it to the screen it's on, as the real window is.
+        c.colorSpaceName = captureColourSpace
         // Each buffer in the pool is a full picture (tens of MB for a big window at full size): a
         // pool of four covers the two held below plus one in flight to the main thread.
         c.queueDepth = 4
@@ -313,6 +332,7 @@ final class WindowCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     fileprivate func deliver(_ sample: CMSampleBuffer, snapshot: Bool) {
         guard let pixelBuffer = sample.imageBuffer,
               let surface = CVPixelBufferGetIOSurface(pixelBuffer)?.takeUnretainedValue() else { return }
+        Self.tagColourSpace(surface, of: pixelBuffer)
         // A stream recycles its buffers, so hold the one on screen and the one before (the window
         // server may still be drawing it). A snapshot's buffer is its own; one is enough.
         if snapshot { recentSamples = [sample] } else { recentSamples.append(sample) }

@@ -9,6 +9,9 @@ What we might build next. New requests go in as they come up, and finished work 
   pointer gets none of it: an event tap takes each scroll before it can reach any app
   (Accessibility, which Expanse already needs). Before, a scroll only opened the canvas over the
   bare desktop.
+- Window pictures on the canvas have the real windows' colours (CAPTURE-41): they're captured in
+  Display P3 and say so, so they're matched to whichever screen shows them. Before, they were
+  slightly off.
 
 ## Bugs
 
