@@ -19,6 +19,9 @@ What we might build next. New requests go in as they come up, and finished work 
 - Window pictures on the canvas have the real windows' colours (CAPTURE-41): they're captured in
   Display P3 and say so, so they're matched to whichever screen shows them. Before, they were
   slightly off.
+- ⌃⌥ + click on a window goes into it (NAV-68), so after a ⌃⌥ scroll you can click with the keys
+  still down. Before, AppKit took it for a ⌃-click and showed the window's menu; ⌃-click alone and
+  right-click still do.
 
 ## Bugs
 

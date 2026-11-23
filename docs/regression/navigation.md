@@ -779,3 +779,14 @@
 - **Check in log:** `view placed by you, but <App>[<id>] you clicked is cut off: gliding to it`; a kept view still logs `view placed by you: … where it is`.
 - **Automate:** unit: the `viewPlaced` branches in `focusSettled` and `exit(focus:)`.
 - **Note:** Supersedes the e1165df note at NAV-23/NAV-47: in a view you placed yourself, only a wholly visible window stays where it is.
+
+## NAV-68 ⌃⌥ + click on a window goes into it, no menu
+- **Type:** Feature
+- **Area:** NAV
+- **Commits:** unreleased (23 Nov)
+- **Setup:** At 100% with several windows, the pointer over one.
+- **Steps:**
+  1. Hold ⌃⌥ and scroll (NAV-66) so the canvas opens, then, still holding ⌃⌥, click a window.
+  2. On the canvas again, ⌃-click a window (⌃ alone), and right-click one with and without ⌃⌥.
+- **Expected:** Step 1 goes into the window, as a plain click does: no "Fill screen, Half screen…" menu. Step 2 shows the window's menu each time, as before. At 100% with the canvas not up, a ⌃-click on a real window is that app's, as before.
+- **Automate:** unit: `CanvasView.isPlainClick(type:flags:)`, `menu(for:)` gives no menu for a ⌃⌥ left click and does for the rest, and `mouseDown` with ⌃⌥ takes the window as a plain click does; manual for AppKit handing the click on to `mouseDown` once there's no menu.
