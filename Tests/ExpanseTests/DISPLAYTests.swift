@@ -547,7 +547,7 @@ struct DISPLAYTests {
         #expect(CanvasController.appRounding == 32)
         #expect(!c.isDerived)
         c.homeFromCanvas()
-        c.fittedViewSize = c.viewport.size
+        c.fittedAreaSize = c.workArea.size
         // Every window placed from its home spot (as restoring a layout does): rounding isn't
         // shrinking, so R and B stay put.
         c.fitLayoutToScreen(tidy: false, rederiving: nil)
@@ -597,7 +597,7 @@ struct DISPLAYTests {
             w.home = w.canvasFrame.origin
             w.canvasFrame = f
         }
-        c.fittedViewSize = TestDisplay.laptop.usable.size
+        c.fittedAreaSize = TestDisplay.laptop.usable.size
         // Started on the big display: windows get the sizes you chose, and the layout is fitted
         // from the laptop's (as apply does for windows restored at launch).
         Self.switchDisplay(c, to: .external)

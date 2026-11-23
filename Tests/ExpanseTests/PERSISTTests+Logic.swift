@@ -195,7 +195,7 @@ extension PERSISTTests {
         a.home = CGPoint(x: 300, y: 100)
         b.home = CGPoint(x: 1000, y: 500)
         let c = Self.synced([a, b])
-        c.fittedViewSize = c.viewSize
+        c.fittedAreaSize = c.workArea.size
         Self.quietly(c) { c.fitLayoutToScreen(tidy: false, rederiving: []) }
         #expect(a.canvasFrame.origin == CGPoint(x: 100, y: 100))
         #expect(b.canvasFrame.origin == CGPoint(x: 800, y: 100))

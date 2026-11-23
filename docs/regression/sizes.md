@@ -259,3 +259,15 @@
 - **Expected:** Step 1: it fills the screen, as macOS does it. Step 2: it grew right and down from its top-left; the windows above and to its left are clear of it (those to the right and below are under it). Step 3: it's back at its size and every window is where it was before step 1.
 - **Check in log:** `filled <app>[<id>]: kept its top-left; view moved by …`, then `unfilled …`.
 - **Automate:** unit: `fills(_:usable:)`, and Fill and Return through `realWindowChanged` (with `resizeIsYours`); end-to-end in the VM (SIZE-20).
+
+## SIZE-21 Windows are centred and sized in the work area above the Dock
+- **Type:** Bug fix
+- **Area:** SIZE
+- **Commits:** unreleased (23 Nov)
+- **Before:** A centred window was centred in the whole area below the menu bar, so with the Dock always shown it sat high, with a gap above it and its bottom under the Dock; a window sized to that full height hid under it too.
+- **Setup:** System Settings › Desktop & Dock: "Automatically hide and show the Dock" off, Dock at the bottom (then on the right). A window much smaller than the screen, and one you can make taller than the work area.
+- **Steps:**
+  1. ⌃⌥C on the small window (or click it on the canvas).
+  2. Make the other window taller than the work area and go to it.
+- **Expected:** Step 1: it centres in the area above the Dock — the space below it, down to the Dock, equals the space above it. Step 2: it takes the work area's size less the margin all round at most, centred inside it; nothing ends up under the Dock. With the Dock on the right the same holds sideways: centred between the left edge and the Dock.
+- **Automate:** unit: `workArea`, `focusCamera(for:)` and `fittedSize(_:for:)`.
