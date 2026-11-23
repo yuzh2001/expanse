@@ -78,7 +78,7 @@ import Security
                 { t.link("appearance", ["mode": "dark"]) }, { t.link("appearance", ["mode": "light"]) },
             ])
         },
-        Case("UI-04", "Zoomed out, the canvas covers the Dock but not the menu bar", .look) { t in
+        Case("UI-04", "Zoomed out, the canvas sits under the Dock and the menu bar", .look) { t in
             let dialogs = t.uiDialogsOnScreen()
             guard dialogs.isEmpty else { throw Skip("a dialog is on screen (\(dialogs.joined(separator: ", "))): the canvas goes under it") }
             try await t.window("UI-04 A")
@@ -86,21 +86,21 @@ import Security
             let s = try await t.settle()
             try await t.pause(1)   // it checks for dialogs twice a second
             guard let canvas = t.uiOverlay(s) else { throw Failure("can't find Expanse's canvas window") }
-            try t.expect(canvas.layer == uiCanvasLevel, "zoomed out, the canvas should be at level \(uiCanvasLevel), just under the menu bar (it's at \(canvas.layer))")
-            try t.expect(canvas.layer > uiDockLevel && canvas.layer < uiMenuBarLevel,
-                         "the canvas (level \(canvas.layer)) should be above the Dock (\(uiDockLevel)) and under the menu bar (\(uiMenuBarLevel))")
+            try t.expect(canvas.layer == uiCanvasLevel, "zoomed out, the canvas should be at level \(uiCanvasLevel), just under the Dock (it's at \(canvas.layer))")
+            try t.expect(canvas.layer < uiDockLevel && canvas.layer < uiMenuBarLevel,
+                         "the canvas (level \(canvas.layer)) should be under the Dock (\(uiDockLevel)) and the menu bar (\(uiMenuBarLevel))")
             // The Dock's own windows (not the desktop-level ones it keeps under everything).
             for dock in t.uiWindows(owner: "Dock") where (0..<uiMenuBarLevel).contains(dock.layer) {
-                try t.expect(dock.layer < canvas.layer, "the Dock's window at level \(dock.layer) is above the canvas")
+                try t.expect(dock.layer > canvas.layer, "the Dock's window at level \(dock.layer) is under the canvas")
             }
             try t.expectNear(canvas.frame, s.viewport, "the canvas should cover the whole screen below the menu bar")
             if Input.allowed {
                 Input.click(at: CGPoint(x: 18, y: max(4, s.viewport.minY / 2)))
                 try await t.pause(0.8)
-                try await t.look("The Apple menu opened above the canvas, which still covers the Dock and every window?")
+                try await t.look("The Apple menu opened above the canvas; the Dock and the canvas are both visible?")
                 Input.key(.escape)
             } else {
-                try await t.look("Click the Apple menu: it opens above the canvas, which covers the Dock and every window? (Esc closes it.)")
+                try await t.look("Click the Apple menu: it opens above the canvas; the Dock and the canvas are both visible? (Esc closes it.)")
             }
         },
         Case("UI-07", "The canvas shows the real desktop picture", .look) { t in
@@ -352,10 +352,10 @@ import Security
             let s = try await t.settle()
             try await t.noLog("(under a dialog)", within: 3)
             let level = t.uiOverlay(s)?.layer ?? Int.min
-            try t.expect(level == uiCanvasLevel, "zoomed out, the canvas should cover the Dock at level \(uiCanvasLevel) (it's at \(level))")
+            try t.expect(level == uiCanvasLevel, "zoomed out, the canvas should sit under the Dock at level \(uiCanvasLevel) (it's at \(level))")
             // The Dock's own windows (not the desktop-level ones it keeps under everything).
             for dock in t.uiWindows(owner: "Dock") where (0..<uiMenuBarLevel).contains(dock.layer) {
-                try t.expect(dock.layer < level, "the Dock's window at level \(dock.layer) is above the canvas")
+                try t.expect(dock.layer > level, "the Dock's window at level \(dock.layer) is under the canvas")
             }
             // A window at dialog level under 100×50pt, or fully transparent, doesn't count either.
             let mark = t.log.mark()
@@ -914,8 +914,8 @@ private func uiCGWindowsNamed(_ name: String) -> [CGWindowID] {
 
 // MARK: - Levels and sizes
 
-/// Zoomed out, the canvas sits just under the menu bar (OverlayWindow.canvasLevel)…
-private let uiCanvasLevel = Int(CGWindowLevelForKey(.mainMenuWindow)) - 1
+/// Zoomed out, the canvas sits just under the Dock (OverlayWindow.canvasLevel)…
+private let uiCanvasLevel = Int(CGWindowLevelForKey(.dockWindow)) - 1
 /// …and at 100% under every app window (OverlayWindow.backdropLevel).
 private let uiBackdropLevel = Int(CGWindowLevelForKey(.backstopMenu))
 private let uiMenuBarLevel = Int(CGWindowLevelForKey(.mainMenuWindow))

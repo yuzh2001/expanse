@@ -412,7 +412,7 @@ import Security
 
 // MARK: - Levels, sizes, settings
 
-private let setupCanvasLevel = Int(CGWindowLevelForKey(.mainMenuWindow)) - 1
+private let setupCanvasLevel = Int(CGWindowLevelForKey(.dockWindow)) - 1
 private let setupPanelLevel = Int(CGWindowLevelForKey(.popUpMenuWindow))
 private let setupPanelWidth: CGFloat = 360 + 2 * 24
 /// Answering macOS's own prompt: the case is about its button, so it isn't opened for you.

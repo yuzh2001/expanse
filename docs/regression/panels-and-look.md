@@ -34,16 +34,16 @@
 - **Expected:** The canvas behind the windows is a light grey in light mode and a dark grey in dark mode, switching straight away.
 - **Automate:** manual: appearance (a development build can force it with `expanse://appearance?mode=dark`, debug-only).
 
-## UI-04 Zoomed out, the canvas covers the Dock but not the menu bar
+## UI-04 Zoomed out, the canvas sits under the Dock and the menu bar
 - **Type:** Feature
 - **Area:** UI
 - **Commits:** 0cdf466 (0.1.0), 9428c25 (0.1.22)
 - **Setup:** Dock always shown.
 - **Steps:**
   1. Zoom out. Click the menu bar (e.g. the Apple menu).
-- **Expected:** The canvas covers every window and the Dock; the menu bar stays above it and works.
+- **Expected:** The canvas covers every window; the Dock, the menu bar, notification banners and Notification Center stay above it and work.
 - **Automate:** manual: window levels.
-- **Note:** Since 9428c25 another app's dialog (alert, password prompt) stays above the canvas too.
+- **Note:** Since 9428c25 another app's dialog (alert, password prompt) stays above the canvas too. Until <commit> the canvas also covered the Dock and Notification Center; it now sits just under the Dock.
 
 ## UI-05 Expanse lives in the menu bar, not the Dock
 - **Type:** Feature
@@ -282,7 +282,7 @@
 - **Setup:** No dialogs open. Dock visible.
 - **Steps:**
   1. Zoom out and wait a few seconds.
-- **Expected:** The canvas covers the Dock as usual. The log has no `(under a dialog)` line. Expanse's own windows, and windows under 100×50pt or fully transparent, don't count either.
+- **Expected:** The canvas sits under the Dock as usual. The log has no `(under a dialog)` line. Expanse's own windows, and windows under 100×50pt or fully transparent, don't count either.
 - **Automate:** manual: lowestDialogLevel filters the live window list.
 
 ## UI-25 At 100% the real desktop shows through the backdrop

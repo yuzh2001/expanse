@@ -3010,10 +3010,10 @@ final class CanvasController: NSObject {
 
     // MARK: System prompts
 
-    /// The canvas covers app windows and the Dock, but never another app's dialog (an alert, a
-    /// password or permission prompt, a run-modal Save panel): those float above app windows, and
-    /// covered by the canvas they'd wait unseen until you left it. With one on screen, the canvas
-    /// goes just under it.
+    /// The canvas covers app windows, but never another app's dialog (an alert, a password or
+    /// permission prompt, a run-modal Save panel): those float above app windows, and covered by
+    /// the canvas they'd wait unseen until you left it. With one on screen, the canvas goes just
+    /// under it.
     private var canvasLevel: NSWindow.Level {
         guard let dialog = Self.lowestDialogLevel() else { return OverlayWindow.canvasLevel }
         return NSWindow.Level(rawValue: dialog - 1)
@@ -5504,8 +5504,10 @@ final class CanvasController: NSObject {
 }
 
 final class OverlayWindow: NSWindow {
-    /// Canvas mode: just under the menu bar, above every app window and the Dock.
-    static let canvasLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) - 1)
+    /// Canvas mode: just under the Dock and Notification Center, above every app window and
+    /// floating panel — the system's own UI (the Dock, banners, Notification Center itself)
+    /// stays visible and clickable over the canvas.
+    static let canvasLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) - 1)
     /// Live mode: below every app window, and see-through but for what Expanse draws there (the
     /// pictures of parked windows, the minimap): the real desktop shows, as macOS draws it, with
     /// the shade it keeps under the menu bar and the dimming behind a window that fills the screen.
