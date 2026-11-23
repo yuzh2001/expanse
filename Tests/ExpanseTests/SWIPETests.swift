@@ -5,7 +5,8 @@ import AppKit
 @_private(sourceFile: "MenuPanel.swift") @testable import Expanse
 
 /// TrackpadGestures.SwipeRecognizer: raw finger counts and centers in, swipes out. The frames are
-/// fractions of the trackpad (0…1, y up), a swipe firing once per touch-down.
+/// fractions of the trackpad (0…1, y up), a swipe firing once per touch-down — and only once the
+/// finger count has held still for a few frames, so a finger landing late still joins it.
 @Suite("SWIPE: Trackpad swipe recognition") struct SWIPETests {
 
     /// `steps` of (fingers down, center x, center y), events collected.
@@ -26,16 +27,25 @@ import AppKit
 
     @Test("SWIPE-01 A three-finger swipe fires in each direction")
     func threeAllWays() {
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.5, 0.58)]) == [Self.swipe(3, .up)])
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.5, 0.42)]) == [Self.swipe(3, .down)])
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.58, 0.5)]) == [Self.swipe(3, .right)])
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.42, 0.5)]) == [Self.swipe(3, .left)])
+        #expect(Self.run([(3, 0.5, 0.5), (3, 0.5, 0.52), (3, 0.5, 0.55), (3, 0.5, 0.58)]) == [Self.swipe(3, .up)])
+        #expect(Self.run([(3, 0.5, 0.5), (3, 0.5, 0.48), (3, 0.5, 0.45), (3, 0.5, 0.42)]) == [Self.swipe(3, .down)])
+        #expect(Self.run([(3, 0.5, 0.5), (3, 0.52, 0.5), (3, 0.55, 0.5), (3, 0.58, 0.5)]) == [Self.swipe(3, .right)])
+        #expect(Self.run([(3, 0.5, 0.5), (3, 0.48, 0.5), (3, 0.45, 0.5), (3, 0.42, 0.5)]) == [Self.swipe(3, .left)])
     }
 
     @Test("SWIPE-01 Fingers landing a frame apart make one swipe of the final count")
     func staggered() {
-        // Three fingers down, then a fourth joins before the center moves: a four-finger swipe.
-        #expect(Self.run([(3, 0.5, 0.5), (4, 0.51, 0.51), (4, 0.51, 0.58)]) == [Self.swipe(4, .up)])
+        // Three fingers down, then a fourth joins before the swipe starts: a four-finger swipe.
+        #expect(Self.run([(3, 0.5, 0.5), (4, 0.51, 0.51), (4, 0.51, 0.53), (4, 0.51, 0.56), (4, 0.51, 0.6)])
+                == [Self.swipe(4, .up)])
+    }
+
+    @Test("SWIPE-01 Three fingers moving don't pre-empt the fourth still landing")
+    func lateFourth() {
+        // Three fingers already travelling — past the travel threshold but the count unsettled —
+        // then the fourth joins: the swipe fires as four-fingered, not three.
+        #expect(Self.run([(3, 0.5, 0.5), (3, 0.55, 0.5), (4, 0.5, 0.5), (4, 0.5, 0.53), (4, 0.5, 0.56), (4, 0.5, 0.6)])
+                == [Self.swipe(4, .up)])
     }
 
     @Test("SWIPE-02 Two-finger scrolls and palms never fire")
@@ -46,8 +56,8 @@ import AppKit
 
     @Test("SWIPE-02 A drift below the threshold, or a diagonal that isn't dominant, doesn't fire")
     func undecided() {
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.52, 0.51), (3, 0.54, 0.52), (0, 0, 0)]).isEmpty)
-        #expect(Self.run([(3, 0.5, 0.5), (3, 0.56, 0.56), (0, 0, 0)]).isEmpty)
+        #expect(Self.run([(3, 0.5, 0.5), (3, 0.51, 0.5), (3, 0.52, 0.5), (3, 0.53, 0.5), (0, 0, 0)]).isEmpty)
+        #expect(Self.run([(3, 0.5, 0.5), (3, 0.53, 0.53), (3, 0.55, 0.55), (3, 0.56, 0.56), (0, 0, 0)]).isEmpty)
     }
 
     @Test("SWIPE-02 A finger lifting before the swipe aborts it")
@@ -57,8 +67,8 @@ import AppKit
 
     @Test("SWIPE-01 After firing, the rest of the touch-down is quiet, then the next fires")
     func rearm() {
-        let events = Self.run([(4, 0.5, 0.5), (4, 0.5, 0.58), (4, 0.5, 0.9), (0, 0, 0),
-                               (4, 0.5, 0.5), (4, 0.42, 0.5), (0, 0, 0)])
+        let events = Self.run([(4, 0.5, 0.5), (4, 0.5, 0.55), (4, 0.5, 0.6), (4, 0.5, 0.9), (0, 0, 0),
+                               (4, 0.5, 0.5), (4, 0.48, 0.5), (4, 0.45, 0.5), (4, 0.42, 0.5), (0, 0, 0)])
         #expect(events == [Self.swipe(4, .up), Self.swipe(4, .left)])
     }
 

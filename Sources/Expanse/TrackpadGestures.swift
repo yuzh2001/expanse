@@ -128,10 +128,17 @@ struct SwipeRecognizer {
     /// How many fingers this swipe has, 3 or 4.
     private var fingers = 0
     private var origin = (x: 0.0, y: 0.0)
+    /// Frames the finger count has held still for. A swipe can't fire until it settles: real
+    /// fingers land a frame or two apart, and a fourth joining late mustn't leave the swipe
+    /// latched as a three-finger one (it would hop instead of toggling the canvas).
+    private var settled = 0
 
     /// How far the center must move before it's a swipe (a fraction of the trackpad's width), and
     /// how much the longer axis must beat the shorter by for the direction to count.
     static let travel = 0.05, dominance = 1.2
+    /// Frames the finger count must hold still before a swipe may fire: about 30ms at the
+    /// trackpad's ~100Hz, imperceptible but long enough for a late finger to join.
+    static let settle = 3
 
     /// One trackpad frame: `count` fingers touching, their center at (`x`, `y`) in 0…1 (y up).
     mutating func frame(count: Int, x: Double, y: Double) -> [Event] {
@@ -140,18 +147,21 @@ struct SwipeRecognizer {
             guard count == 3 || count == 4 else { return [] }
             fingers = count
             origin = (x, y)
+            settled = 0
             phase = .undecided
             return []
         case .undecided:
             if count == 0 { phase = .idle; return [] }
             if count == 3 || count == 4 {
                 // A finger joining or leaving before the swipe starts: the gesture's count
-                // relatches, and travel is measured from here.
-                if count != fingers { fingers = count; origin = (x, y) }
+                // relatches, the settle window restarts, and travel is measured from here.
+                if count != fingers { fingers = count; origin = (x, y); settled = 0 }
+                else { settled += 1 }
             } else {
                 phase = .done
                 return []
             }
+            guard settled >= Self.settle else { return [] }
             let (dx, dy) = (x - origin.x, y - origin.y)
             guard abs(dx) > Self.travel || abs(dy) > Self.travel,
                   max(abs(dx), abs(dy)) > Self.dominance * min(abs(dx), abs(dy)) else { return [] }
