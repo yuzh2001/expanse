@@ -198,8 +198,10 @@ private final class QuitApp: NSRunningApplication {
             let c = Self.canvas([w])
             defer { Self.finish(c) }
             Self.watchGlides(c)
-            // You panned at 100% (e1165df): it's focused where it is.
+            // You panned at 100% and macOS moved focus on its own (e1165df; a click of yours
+            // would glide instead — NAV-67): it's focused where it is.
             c.viewPlaced = true
+            c.clickedOrTyped = { _ in false }
             c.focusSettled(on: w.id)
             #expect(c.glideTarget == nil)
             c.viewPlaced = false

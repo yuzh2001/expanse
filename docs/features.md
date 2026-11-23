@@ -9,6 +9,13 @@ What we might build next. New requests go in as they come up, and finished work 
   pointer gets none of it: an event tap takes each scroll before it can reach any app
   (Accessibility, which Expanse already needs). Before, a scroll only opened the canvas over the
   bare desktop.
+- Clicking a window cut off by the screen's edge centres it, even in a view you scrolled to
+  yourself (NAV-67): before, a view you'd placed kept it where it was. One wholly on screen still
+  stays put, focus macOS moves by itself never moves the view, and with auto-centre off nothing
+  changes.
+- Windows centre and size in the work area above the Dock (SIZE-21): with the Dock always shown,
+  a centred window's bottom clears it and one as big as the work area no longer runs under it;
+  part of a window under the Dock counts as cut off. With the Dock on the right it holds sideways.
 
 ## Bugs
 

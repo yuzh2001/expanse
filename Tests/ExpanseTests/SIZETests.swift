@@ -358,4 +358,31 @@ import AppKit
         #expect(c.camera.origin == .zero)
         #expect(w.preferredSize == Self.size(600, 400))
     }
+
+    // MARK: SIZE-21
+
+    @Test("SIZE-21 The work area is the screen less the menu bar and a Dock that's always shown")
+    func size21a() {
+        // A Dock at the bottom: the work area ends above it (1512×879 of the 1512×949 view).
+        #expect(TestCanvas.make(display: TestDisplay(dockBottom: 70)).workArea == Self.r(0, 0, 1512, 879))
+        // On the right: it ends at the Dock (the menu bar's strip is already out of the view).
+        #expect(TestCanvas.make(display: TestDisplay(dockRight: 80)).workArea == Self.r(0, 0, 1432, 949))
+        // No Dock always shown: the whole view, as before.
+        #expect(TestCanvas.make().workArea == Self.r(0, 0, 1512, 949))
+    }
+
+    @Test("SIZE-21 Windows are centred and sized in the work area, never under the Dock")
+    func size21b() {
+        let c = TestCanvas.make(display: TestDisplay(dockBottom: 70))
+        let w = Fake.window(id: 2101, canvas: Self.r(0, 0, 600, 400))
+        // Centred in 1512×879 — x as before, y pulled up clear of the Dock strip: the camera
+        // looks at the canvas point that puts it there (the window sits at 0,0).
+        #expect(c.focusCamera(for: w).origin == CGPoint(x: -456, y: -240))
+        // One cut off by the Dock counts as cut off by the screen's edge.
+        let r = c.camera.toView(Self.r(1112, 700, 600, 400))
+        #expect(!c.workArea.insetBy(dx: -1, dy: -1).contains(r))
+        // Too big for the work area: capped to it less the margin, as a smaller screen's would be (SIZE-13).
+        let big = Fake.window(id: 2102, canvas: Self.r(0, 0, 1600, 1200))
+        #expect(c.fittedSize(big, for: c.workArea.size) == Self.size(1480, 847))
+    }
 }

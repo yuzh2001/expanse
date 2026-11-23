@@ -56,7 +56,7 @@
   1. Click inside that window and type straight away.
 - **Expected:** The view glides to centre the window, which keeps the keyboard throughout (the canvas never takes focus during a glide): every typed character lands in it.
 - **Automate:** manual: focus and glide.
-- **Note:** e1165df: after you've panned at 100% yourself, a click on a window you can see focuses it where it is, without moving the view.
+- **Note:** e1165df: after you've panned at 100% yourself, focus macOS moves by itself to a window you can see leaves it where it is. A click on one cut off centres it again (NAV-67).
 
 ## TRACK-06 Moving a window yourself at 100% is followed
 - **Type:** Feature

@@ -48,6 +48,12 @@ struct Camera: Equatable {
     static func centered(on c: CGPoint, scale: CGFloat, viewSize: CGSize) -> Camera {
         Camera(origin: CGPoint(x: c.x - viewSize.width / 2 / scale, y: c.y - viewSize.height / 2 / scale), scale: scale)
     }
+
+    /// `c` (canvas) at the centre of `area` (view coords) — the work area, say, which is less
+    /// than the whole view where a Dock always shows.
+    static func centered(on c: CGPoint, scale: CGFloat, in area: CGRect) -> Camera {
+        Camera(origin: CGPoint(x: c.x - area.midX / scale, y: c.y - area.midY / scale), scale: scale)
+    }
 }
 
 extension CGRect {

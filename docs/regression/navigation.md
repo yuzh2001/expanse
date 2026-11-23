@@ -259,7 +259,7 @@
 - **Expected:** The view glides so A is centred at 100%, and A has focus.
 - **Check in log:** `focus-settled glide to <App>[<id>]: on screen at …`
 - **Automate:** manual: real focus changes.
-- **Note:** Since e1165df, in a view you placed yourself (scrolling at 100%), a partly visible window you click stays where it is.
+- **Note:** e1165df made such a click keep a view you placed yourself; NAV-67 centres it again — only focus macOS moves by itself still stays put (NAV-47).
 
 ## NAV-24 With auto-centre off, focus never moves the view
 - **Type:** Bug fix
@@ -523,7 +523,7 @@
 - **Expected:** With the setting, zooms and glides take about three times as long. Without it (or with a value under 1), normal speed.
 - **Automate:** manual: timing on screen.
 
-## NAV-47 After you pan at 100%, clicking a window you can see doesn't recentre
+## NAV-47 After you pan at 100%, focus macOS moves by itself doesn't recentre
 - **Type:** Bug fix
 - **Area:** NAV
 - **Commits:** e1165df (0.1.25)
@@ -533,22 +533,24 @@
   1. Scroll on the empty desktop to start moving the canvas at 100%.
   2. Hold Space and drag so a window is about a third on screen.
   3. Press Esc.
-  4. Click the partly visible window.
+  4. ⌘-Tab away and back, so macOS — not a click of yours — focuses the partly visible window.
 - **Expected:** The window gets focus and the view stays where you put it; nothing glides.
 - **Check in log:** `view placed by you: <App>[<id>] focused where it is`
 - **Automate:** manual: focus events from the real app.
+- **Note:** e1165df kept the placed view for a click too; NAV-67 narrowed it to focus that moved by itself — your click on a window cut off centres it again.
 
 ## NAV-48 Diving into a window you can see keeps the view you placed
 - **Type:** Bug fix
 - **Area:** NAV
 - **Commits:** e1165df (0.1.25)
 - **Before:** Clicking a partly visible window on the canvas at 100% centred it, moving the view you'd placed.
-- **Setup:** As NAV-47, steps 1–2 (canvas open at 100%, view placed with Space+drag).
+- **Setup:** As NAV-47, steps 1–2 (canvas open at 100%, view placed with Space+drag, a second window wholly on screen).
 - **Steps:**
-  1. Click the partly visible window on the canvas.
-- **Expected:** The canvas drops in place and the window gets focus where it is: the view doesn't move. A window too little on screen (under 48pt showing, or its top cut off) is centred as usual.
+  1. Click the wholly visible window on the canvas.
+- **Expected:** The canvas drops in place and the window gets focus where it is: the view doesn't move. A window partly off the work area — cut off by an edge or under the Dock — centres again (NAV-67), as does one too little on screen (under 48pt showing, or its top cut off).
 - **Check in log:** `view placed by you: diving into <App>[<id>] where it is`
 - **Automate:** unit: CanvasController.goesOnScreen(_:in:) | manual: the dive.
+- **Note:** e1165df kept the placed view for a click on any window on screen; NAV-67 narrowed it to one wholly on screen.
 
 ## NAV-49 The next glide, zoom or display change ends the placed view
 - **Type:** Feature
@@ -762,3 +764,18 @@
   3. Back to 100%, then scroll with ⌘⌃⌥ held, or with only ⌃ or only ⌥.
 - **Expected:** Steps 1 and 2 open the canvas at 100% and the rest of the gesture moves the view, ⌃⌥ held or not; when it ends the view snaps as in NAV-51, so a flick ends with no window cut off and a slow drag stays where you left it. The app under the pointer gets none of the gesture: an event tap takes each scroll before it can reach any app (Accessibility, which Expanse already needs, is what lets it). Step 3 does nothing new: the scroll goes to the window under the pointer, as before (NAV-18).
 - **Automate:** unit: `scrollTakesOverAnywhere(_:)` and `ScrollTap.takes(scrollPhase:momentumPhase:flags:taking:)`; manual for the gesture itself (the event tap swallows it; the monitors' `handleDesktopGesture` branch is the fallback when there's no tap).
+
+## NAV-67 A click on a window cut off by the screen's edge centres it, even in a view you scrolled to
+- **Type:** Bug fix
+- **Area:** NAV
+- **Commits:** unreleased (23 Nov)
+- **Before:** Since e1165df, a view you'd scrolled to at 100% was kept for any window on screen: clicking one that was partly off the edge — on the canvas or on the desktop — focused it where it was, and never brought the rest of it on screen.
+- **Setup:** Auto-centre on, at 100%. A window with part of it past an edge (or under a Dock that's always shown).
+- **Steps:**
+  1. Scroll the canvas at 100% (Space+drag, or a ⌃⌥ scroll) so the window is partly off screen; press Esc.
+  2. Click the part of it you can see.
+  3. Scroll again so the window is wholly on screen, and click it.
+- **Expected:** Step 2: the canvas drops centred on it (its group framed, if it's in one) and it gets the keyboard. Off the canvas the click that gave it focus glides to it the same way. Step 3: the view stays where you put it — a wholly visible window you click doesn't jump. Focus macOS moves by itself in a placed view still keeps it (NAV-47), and with auto-centre off nothing centres (NAV-24).
+- **Check in log:** `view placed by you, but <App>[<id>] you clicked is cut off: gliding to it`; a kept view still logs `view placed by you: … where it is`.
+- **Automate:** unit: the `viewPlaced` branches in `focusSettled` and `exit(focus:)`.
+- **Note:** Supersedes the e1165df note at NAV-23/NAV-47: in a view you placed yourself, only a wholly visible window stays where it is.

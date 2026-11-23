@@ -210,13 +210,14 @@ extension NAVTests {
         }
     }
 
-    @Test("NAV-47 After you pan at 100%, clicking a window you can see doesn't recentre (logic)")
+    @Test("NAV-47 After you pan at 100%, focus macOS moves by itself doesn't recentre (logic)")
     func nav47() {
         Env.withDefaults(["autoCentre": true]) {
             let w = Self.win(1, 1112, 100, 600, 400) // a third off the right edge
             let c = TestCanvas.make(windows: [Self.win(2, 0, 100, 600, 400), w])
             Self.onCanvas(c, active: false, gliding: true) {
                 c.viewPlaced = true // you scrolled the view here at 100%
+                c.clickedOrTyped = { _ in false } // and macOS moved focus on its own
                 let camera = c.camera
                 c.focusSettled(on: w.id)
                 #expect(c.glideTarget == nil)
@@ -293,23 +294,63 @@ extension NAVTests {
 
     @Test("NAV-48 Diving in where you placed the view drops the canvas in place (logic)")
     func nav48b() {
-        let seen = Self.win(1, 1112, 100, 600, 400)  // 400pt on screen
-        let edge = Self.win(2, 1480, 500, 600, 400)  // 32pt on screen
-        let cut = Self.win(3, 300, -50, 600, 400)    // its top under the menu bar
-        let c = TestCanvas.make(windows: [Self.win(4, 0, 100, 600, 400), seen, edge, cut])
+        let seen = Self.win(1, 400, 200, 600, 400)   // all of it on screen
+        let part = Self.win(2, 1112, 100, 600, 400)  // a third off the right edge
+        let edge = Self.win(3, 1480, 500, 600, 400)  // 32pt on screen
+        let cut = Self.win(4, 300, -50, 600, 400)    // its top under the menu bar
+        let c = TestCanvas.make(windows: [Self.win(5, 0, 100, 600, 400), seen, part, edge, cut])
         Self.onCanvas(c) {
             c.camera = Camera(origin: CGPoint(x: 0.4, y: -0.3), scale: 1)
             c.viewPlaced = true
             c.exit(focus: seen)
             #expect(c.animation?.to == Camera(origin: .zero, scale: 1)) // where it is (whole points)
             #expect(c.viewPlaced)
-            for w in [edge, cut] {
+            for w in [part, edge, cut] {
                 c.cancelAnimation()
                 c.camera = Camera()
                 c.viewPlaced = true
                 c.exit(focus: w)
                 #expect(c.animation?.to == c.viewCamera(for: w)) // as usual: centred, or its group framed (NAV-55)
                 #expect(!c.viewPlaced)
+            }
+        }
+    }
+
+    @Test("NAV-67 A click on a window cut off by the screen's edge centres it, even in a view you scrolled to")
+    func nav67() {
+        Env.withDefaults(["autoCentre": true]) {
+            let w = Self.win(1, 1112, 100, 600, 400) // a third off the right edge
+            let c = TestCanvas.make(windows: [Self.win(2, 0, 100, 600, 400), w])
+            // Live: you scrolled the view here at 100%, then clicked the window.
+            Self.onCanvas(c, active: false, gliding: true) {
+                c.viewPlaced = true
+                c.clickedOrTyped = { _ in true } // the click that gave it focus
+                c.focusSettled(on: w.id)
+                #expect(c.glideTarget === w)
+                #expect(!c.viewPlaced)
+            }
+            // On the canvas: the click dives centred, as if the view weren't placed.
+            Self.onCanvas(c) {
+                c.camera = Camera()
+                c.viewPlaced = true
+                c.exit(focus: w)
+                #expect(c.animation?.to == c.viewCamera(for: w))
+                #expect(!c.viewPlaced)
+            }
+        }
+    }
+
+    @Test("NAV-67 With auto-centre off, a click still keeps a placed view where it is (logic)")
+    func nav67b() {
+        Env.withDefaults(["autoCentre": false]) {
+            let w = Self.win(1, 1112, 100, 600, 400)
+            let c = TestCanvas.make(windows: [w])
+            Self.onCanvas(c) {
+                c.camera = Camera()
+                c.viewPlaced = true
+                c.exit(focus: w)
+                #expect(c.animation?.to == Camera(origin: .zero, scale: 1))
+                #expect(c.viewPlaced)
             }
         }
     }
