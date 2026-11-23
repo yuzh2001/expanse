@@ -7,13 +7,14 @@ import ScreenCaptureKit
 @_private(sourceFile: "LayoutStore.swift") @testable import Expanse
 
 /// docs/regression/rows.md. The Rows layout engine, pure functions over canvas frames — no
-/// controller, no screen. The metrics below: 400pt rows with the 20pt gap, the grid a 60pt gap
-/// to the rows' right wrapping past 500pt.
+/// controller, no screen. The metrics below: 400pt rows 100pt apart with a 20pt gap, the grid
+/// a 60pt gap to the rows' right wrapping past 500pt.
 @MainActor @Suite("ROWS: Rows layout", .serialized) struct ROWSTests {
 
     // MARK: Helpers
 
-    private static let m = RowLayout.Metrics(windowHeight: 400, gap: 20, gridGap: 60, gridMaxWidth: 500)
+    private static let m = RowLayout.Metrics(windowHeight: 400, gap: 20, rowGap: 100,
+                                             gridGap: 60, gridMaxWidth: 500)
 
     private static func r(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> CGRect {
         CGRect(x: x, y: y, width: w, height: h)
@@ -41,8 +42,8 @@ import ScreenCaptureKit
         // Sorted by minX: 2 stays at 100; 1's x would overlap, so it goes after it, a gap apart.
         #expect(Self.frame(laid, 2) == Self.r(100, 0, 300, 400))
         #expect(Self.frame(laid, 1) == Self.r(420, 0, 300, 400))
-        // Row 7 becomes row 1, its top 400 + the gap; same height.
-        #expect(Self.frame(laid, 3) == Self.r(0, 420, 250, 400))
+        // Row 7 becomes row 1, its top the row pitch (400 + 100 between rows); same height.
+        #expect(Self.frame(laid, 3) == Self.r(0, 500, 250, 400))
     }
 
     @Test("ROWS-01 A window its app sizes keeps its height, top-aligned in the row (logic)")
@@ -130,13 +131,13 @@ import ScreenCaptureKit
                                   into: rows + [Self.i(3, 2000, 0, 200, 400, row: nil)], Self.m)
         #expect(laid.first { $0.id == 3 }!.row == 0)
         #expect(Self.frame(laid, 3) == Self.r(0, 0, 200, 400))
-        #expect(Self.frame(laid, 1) == Self.r(0, 420, 300, 400))
-        #expect(Self.frame(laid, 2) == Self.r(0, 840, 300, 400))
+        #expect(Self.frame(laid, 1) == Self.r(0, 500, 300, 400))
+        #expect(Self.frame(laid, 2) == Self.r(0, 1000, 300, 400))
         // Below the last: a new row there.
         laid = RowLayout.drop(4, at: Self.r(50, 900, 200, 400),
                               into: rows + [Self.i(4, 2000, 0, 200, 400, row: nil)], Self.m)
         #expect(laid.first { $0.id == 4 }!.row == 2)
-        #expect(Self.frame(laid, 4) == Self.r(50, 840, 200, 400))
+        #expect(Self.frame(laid, 4) == Self.r(50, 1000, 200, 400))
         // Right of the rows' end (they end at 300, the grid starts at 360): back to the grid,
         // packed at the grid's start at its own size whatever the drop's spot was.
         laid = RowLayout.drop(5, at: Self.r(600, 100, 250, 150),
@@ -163,7 +164,7 @@ import ScreenCaptureKit
         #expect(laid.first { $0.id == 6 }!.row == nil)
         // x is kept where there's no overlap; tops are the rows'.
         #expect(Self.frame(laid, 3) == Self.r(1400, 0, 600, 400))
-        #expect(Self.frame(laid, 5) == Self.r(700, 420, 600, 400))
+        #expect(Self.frame(laid, 5) == Self.r(700, 500, 600, 400))
         // The grid goes right of the widest row (2000) + the grid gap.
         #expect(Self.frame(laid, 6) == Self.r(2060, 0, 600, 400))
     }
@@ -220,8 +221,9 @@ import ScreenCaptureKit
         c.windows.first { $0.id == id }
     }
 
-    /// A laptop with a 60pt Dock at the bottom: the work area is 889pt, a row's height 857pt,
-    /// the second row's top 877pt.
+    /// A laptop with a 60pt Dock at the bottom: the work area is 889pt, a row's height 857pt.
+    /// 60pt out of view below the work area puts the rows 124pt apart, the second's top 981pt —
+    /// a centred row's neighbours clear the screen, Dock strip included (see rowMetrics).
     private static let docked = TestDisplay(dockBottom: 60)
 
     /// Leaves the canvas inert and Rows mode off, so nothing leaks into another test.
@@ -254,7 +256,7 @@ import ScreenCaptureKit
             #expect(w.row == 0 && w.canvasFrame.minY == 0 && w.canvasFrame.height == 857, "\(w.id)")
         }
         #expect(c.windows[0].canvasFrame.origin == .zero && c.windows[1].canvasFrame.origin == CGPoint(x: 700, y: 0))
-        #expect(Self.window(c, 4)!.row == 1 && Self.window(c, 4)!.canvasFrame == Self.r(0, 877, 600, 857))
+        #expect(Self.window(c, 4)!.row == 1 && Self.window(c, 4)!.canvasFrame == Self.r(0, 981, 600, 857))
         // The stray joins the grid: its own size, packed right of the rows' end (2000 + 200).
         let stray = Self.window(c, 6)!
         #expect(stray.row == nil && stray.canvasFrame == Self.r(2200, 0, 600, 400))
@@ -290,15 +292,15 @@ import ScreenCaptureKit
         let c = TestCanvas.make(display: Self.docked, windows: [
             Self.placed(1, canvas: Self.r(0, 0, 600, 857)),
             Self.placed(2, canvas: Self.r(620, 0, 600, 857)),
-            Self.placed(3, canvas: Self.r(0, 877, 600, 857)),
-            Self.placed(4, canvas: Self.r(620, 877, 600, 857)),
+            Self.placed(3, canvas: Self.r(0, 981, 600, 857)),
+            Self.placed(4, canvas: Self.r(620, 981, 600, 857)),
         ])
         defer { Self.finish(c) }
         c.rowsMode = true
         // 1 let go with its middle in row 1, over 3's right end: after 3, and 4 shoved right.
         c.rowsDrop(Self.window(c, 1)!, at: Self.r(150, 900, 600, 857))
-        #expect(Self.window(c, 1)!.row == 1 && Self.window(c, 1)!.canvasFrame == Self.r(620, 877, 600, 857))
-        #expect(Self.window(c, 4)!.canvasFrame == Self.r(1240, 877, 600, 857))
+        #expect(Self.window(c, 1)!.row == 1 && Self.window(c, 1)!.canvasFrame == Self.r(620, 981, 600, 857))
+        #expect(Self.window(c, 4)!.canvasFrame == Self.r(1240, 981, 600, 857))
         // 3 let go right of the rows (they end at 1840, the grid starts at 2040): the grid.
         c.rowsDrop(Self.window(c, 3)!, at: Self.r(2100, 0, 600, 857))
         #expect(Self.window(c, 3)!.row == nil && Self.window(c, 3)!.canvasFrame == Self.r(2040, 0, 600, 857))
@@ -380,5 +382,35 @@ import ScreenCaptureKit
         // And snapping still works in both directions.
         let (f, _) = c.snap(Self.r(627, 6, 400, 300), excluding: [2])
         #expect(f.minY == 0 && f.minX == 620)
+    }
+
+    // MARK: ROWS-15
+
+    @Test("ROWS-15 A centred row keeps the rows beside it off the screen, Dock strip included")
+    func rows15() {
+        defer { UserDefaults.standard.removeObject(forKey: CanvasController.rowsModeKey) }
+        let c = TestCanvas.make(display: Self.docked, windows: [
+            Self.placed(1, canvas: Self.r(0, 0, 600, 400)),
+            Self.placed(2, canvas: Self.r(700, 0, 600, 400)),
+            Self.placed(3, canvas: Self.r(0, 981, 600, 400)),
+            Self.placed(4, canvas: Self.r(700, 981, 600, 400)),
+            Self.placed(5, canvas: Self.r(0, 1962, 600, 400)),
+            Self.placed(6, canvas: Self.r(700, 1962, 600, 400)),
+        ])
+        defer { Self.finish(c) }
+        c.rowsMode = true
+        // Rows a viewport and more apart: pitch = 857 + max(96, 60 out of view + 16 + 48).
+        #expect(RowLayout.pitch(c.rowMetrics) == 981)
+        // Centre the middle row: the ones beside it are wholly off the screen — nothing of them
+        // shows beside or behind the Dock — so they stay parked pictures on the backdrop.
+        c.camera = c.focusCamera(for: Self.window(c, 3)!)
+        let parked = Dictionary(uniqueKeysWithValues: c.commitPlan().map { ($0.0.id, $0.2) })
+        #expect(parked[3] == false && parked[4] == false)
+        for id in [1, 2, 5, 6] as [CGWindowID] {
+            #expect(parked[id] == true, "\(id)")
+            let r = c.camera.toView(Self.window(c, id)!.canvasFrame)
+                .offsetBy(dx: c.viewport.minX, dy: c.viewport.minY)
+            #expect(r.intersection(c.viewport).isNull, "\(id) at \(r)")
+        }
     }
 }

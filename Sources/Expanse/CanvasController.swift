@@ -3014,10 +3014,17 @@ final class CanvasController: NSObject {
 
     /// What the Rows engine works in on this screen: rows the work area's height less the margins
     /// all round, the standard gap between neighbours, the grid a big step right of the rows'
-    /// right end, its shelves wrapping at two work areas wide.
+    /// right end, its shelves wrapping at two work areas wide. Rows sit more than a viewport
+    /// apart: with one centred in the work area (see focusCamera), the rows beside it lie past
+    /// the screen's edges, the Dock strip included — never peeking out under it — and a clear
+    /// band shows between them zoomed out.
     private var rowMetrics: RowLayout.Metrics {
-        RowLayout.Metrics(windowHeight: workArea.height - 2 * Self.screenMargin,
-                          gap: Self.gap, top: 0, gridGap: 200, gridMaxWidth: 2 * workArea.width)
+        // What the work area leaves out of the view, above and below (the Dock's strip, say).
+        let outside = max(workArea.minY, viewSize.height - workArea.maxY)
+        return RowLayout.Metrics(windowHeight: workArea.height - 2 * Self.screenMargin,
+                                 gap: Self.gap,
+                                 rowGap: max(96, outside + Self.screenMargin + 48),
+                                 top: 0, gridGap: 200, gridMaxWidth: 2 * workArea.width)
     }
 
     /// Every window as the engine sees it (see RowLayout.Item).

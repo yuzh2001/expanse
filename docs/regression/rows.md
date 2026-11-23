@@ -2,9 +2,9 @@
 
 [All areas](README.md)
 
-The Rows layout mode's engine: rows of windows sharing a top and a height, x free within a row,
-plus an "unsorted grid" to the rows' right. Pure functions (`RowLayout`), exercised directly by
-the unit tests — no canvas, controller or screen involved yet.
+The Rows layout mode ("Arrange in rows"): rows of windows sharing a top and a height, x free
+within a row, plus an "unsorted grid" to the rows' right. `RowLayout` is pure functions exercised
+directly; the later cases cover it wired into the canvas, fake windows standing in for real ones.
 
 ## ROWS-01 A row shares its top and height
 - **Type:** Feature
@@ -170,3 +170,16 @@ the unit tests — no canvas, controller or screen involved yet.
   no engine pass ever runs.
 - **Automate:** unit: `rowsDrop`/`applyRows` are no-ops with the mode off; `snap`'s default still
   snaps y.
+
+## ROWS-15 A centred row keeps the rows beside it off the screen
+- **Type:** Bug fix
+- **Area:** ROWS
+- **Commits:** unreleased (23 Nov)
+- **Before:** Rows were a window-height plus the standard gap apart, so with a row centred at
+  100% the next row's top sat a few points below the work area — inside the Dock strip but
+  still on the screen — and its windows showed as slivers beside and behind the Dock.
+- **Now:** Rows sit more than a viewport apart: the space between them is the out-of-view strip
+  (the Dock's, say) plus a margin, at least 96pt. With a row centred in the work area, the rows
+  beside it lie wholly off the screen and stay parked pictures on the backdrop.
+- **Automate:** unit: with a bottom-Dock display, `focusCamera` on a row's window leaves the
+  neighbouring rows' real rects off the viewport and `commitPlan` parks them.

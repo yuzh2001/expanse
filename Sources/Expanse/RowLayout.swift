@@ -19,8 +19,11 @@ enum RowLayout {
     struct Metrics: Equatable {
         /// Every row's window height (the work area's height less the margins all round).
         var windowHeight: CGFloat
-        /// The space between windows, rows and shelves.
+        /// The space between windows in a row, and between grid items and shelves.
         var gap: CGFloat
+        /// The space between rows: wide enough that a row centred on screen leaves the rows
+        /// beside it entirely off it, Dock strip included (see CanvasController.rowMetrics).
+        var rowGap: CGFloat
         /// The canvas y of the first row's top (and the grid's).
         var top: CGFloat = 0
         /// The space between the rows' right end and the grid region.
@@ -30,7 +33,7 @@ enum RowLayout {
     }
 
     /// The vertical step from one row's top to the next's.
-    static func pitch(_ m: Metrics) -> CGFloat { m.windowHeight + m.gap }
+    static func pitch(_ m: Metrics) -> CGFloat { m.windowHeight + m.rowGap }
 
     /// Row `i`'s top edge.
     static func rowTop(_ i: Int, _ m: Metrics) -> CGFloat { m.top + CGFloat(i) * pitch(m) }
