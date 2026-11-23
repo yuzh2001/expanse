@@ -82,7 +82,7 @@ final class LogFile: @unchecked Sendable {
     }()
 
     /// Tests give a folder of their own.
-    init(folder: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Expanse", isDirectory: true)) {
+    init(folder: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/\(Variant.folderName)", isDirectory: true)) {
         self.folder = folder
     }
 
