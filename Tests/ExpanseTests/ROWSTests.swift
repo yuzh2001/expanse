@@ -138,12 +138,18 @@ import ScreenCaptureKit
                               into: rows + [Self.i(4, 2000, 0, 200, 400, row: nil)], Self.m)
         #expect(laid.first { $0.id == 4 }!.row == 2)
         #expect(Self.frame(laid, 4) == Self.r(50, 1000, 200, 400))
-        // Right of the rows' end (they end at 300, the inbox starts at 360): back to the inbox,
-        // packed at the inbox's start at its own size whatever the drop's spot was.
+        // Right of the rows' end (they end at 300, the inbox starts at 360) but at a row's
+        // height (its middle 175 is in row 0's band): it extends row 0, not the inbox.
         laid = RowLayout.drop(5, at: Self.r(600, 100, 250, 150),
                               into: rows + [Self.i(5, 50, 420, 250, 400, row: 1)], Self.m)
-        #expect(laid.first { $0.id == 5 }!.row == nil)
-        #expect(Self.frame(laid, 5) == Self.r(360, 0, 250, 400))
+        #expect(laid.first { $0.id == 5 }!.row == 0)
+        #expect(Self.frame(laid, 5) == Self.r(600, 0, 250, 400))
+        // Same spot past the rows' end but let go in the gap between rows (its middle 480 is
+        // under row 0's bottom at 400): back to the inbox, packed at its start at its own size.
+        laid = RowLayout.drop(6, at: Self.r(600, 405, 250, 150),
+                              into: rows + [Self.i(6, 50, 420, 250, 400, row: 1)], Self.m)
+        #expect(laid.first { $0.id == 6 }!.row == nil)
+        #expect(Self.frame(laid, 6) == Self.r(360, 0, 250, 400))
     }
 
     // MARK: ROWS-06
@@ -301,9 +307,13 @@ import ScreenCaptureKit
         c.rowsDrop(Self.window(c, 1)!, at: Self.r(150, 900, 600, 857))
         #expect(Self.window(c, 1)!.row == 1 && Self.window(c, 1)!.canvasFrame == Self.r(620, 981, 600, 857))
         #expect(Self.window(c, 4)!.canvasFrame == Self.r(1240, 981, 600, 857))
-        // 3 let go right of the rows (they end at 1840, the inbox starts at 2040): the inbox.
-        c.rowsDrop(Self.window(c, 3)!, at: Self.r(2100, 0, 600, 857))
+        // 3 let go right of the rows (they end at 1840, the inbox starts at 2040) in the gap
+        // between them (its middle 908.5 is under row 0's bottom at 857): the inbox.
+        c.rowsDrop(Self.window(c, 3)!, at: Self.r(2100, 480, 600, 857))
         #expect(Self.window(c, 3)!.row == nil && Self.window(c, 3)!.canvasFrame == Self.r(2040, 0, 600, 857))
+        // Let go just as far right but at row 1's height: it joins row 1 where dropped.
+        c.rowsDrop(Self.window(c, 3)!, at: Self.r(2100, 981, 600, 857))
+        #expect(Self.window(c, 3)!.row == 1 && Self.window(c, 3)!.canvasFrame == Self.r(2100, 981, 600, 857))
     }
 
     // MARK: ROWS-11

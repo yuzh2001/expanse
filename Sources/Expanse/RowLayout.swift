@@ -94,20 +94,23 @@ enum RowLayout {
         return right + m.inboxGap
     }
 
-    /// The dragged item `id` was let go at `proposed` (the caller snapped it already). Right of
-    /// the rows' end it's back in the inbox; anywhere else it lands in the row its middle is in —
-    /// a new row opening above the first or below the last when its middle is past them — then
-    /// everything settles (see layout). Left neighbours keep their x; the drop lands after the
-    /// rightmost one it would overlap, and right neighbours are shoved on by the sweep.
+    /// The dragged item `id` was let go at `proposed` (the caller snapped it already). A middle at
+    /// a row's height lands it in that row — right of the row's end it extends the row — a new
+    /// row opening above the first or below the last when its middle is past them. Right of the
+    /// rows' end at a height no row covers it's back in the inbox. Then everything settles (see
+    /// layout). Left neighbours keep their x; the drop lands after the rightmost one it would
+    /// overlap, and right neighbours are shoved on by the sweep.
     static func drop(_ id: CGWindowID, at proposed: CGRect, into items: [Item], _ m: Metrics) -> [Item] {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return layout(items, m) }
         var out = items
-        if proposed.midX >= inboxMinX(out, excluding: id, m) {
+        var k = row(atY: proposed.midY, m)
+        let rowCount = Set(out.compactMap(\.row)).count
+        let atRowHeight = k >= 0 && k < rowCount && proposed.midY < rowTop(k, m) + m.windowHeight
+        if proposed.midX >= inboxMinX(out, excluding: id, m), !atRowHeight {
             out[i].row = nil
             out[i].frame.origin = proposed.origin
             return layout(out, m)
         }
-        var k = row(atY: proposed.midY, m)
         if k < 0 {
             // Dropped above the first row: a new one opens at the top.
             for j in out.indices where out[j].row != nil { out[j].row! += 1 }
@@ -115,7 +118,7 @@ enum RowLayout {
         } else {
             // Below the last row: a new one opens there. Counting the dragged item's row too,
             // as the rows stand when it's let go.
-            k = min(k, Set(out.compactMap(\.row)).count)
+            k = min(k, rowCount)
         }
         let left = out.filter { $0.id != id && $0.row == k && $0.frame.midX < proposed.midX }
             .map(\.frame.maxX).max()

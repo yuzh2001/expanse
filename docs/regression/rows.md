@@ -54,7 +54,7 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
 - **Automate:** unit: `drop` into a row's middle and over a left neighbour's end, checking the
   shoved neighbours' new x.
 
-## ROWS-05 Dropping past the rows opens a new row; into the inbox puts it back
+## ROWS-05 Dropping past the rows opens a new row; into the inbox off the rows' heights puts it back
 - **Type:** Feature
 - **Area:** ROWS
 - **Commits:** unreleased (23 Nov)
@@ -62,11 +62,11 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
 - **Steps:**
   1. Let go above the first row.
   2. Let go below the last.
-  3. Let go with its middle right of the rows' right end.
+  3. Let go with its middle right of the rows' right end, at a height no row covers.
 - **Expected:** Step 1 opens a new row 0 and pushes the others down; step 2 opens one at the
   bottom; step 3 puts it back in the inbox at the inbox's packed spot, at its own size.
 - **Automate:** unit: `drop` with middles before the first row, past the last, and right of
-  `inboxMinX`.
+  `inboxMinX` off the rows' heights — at a row's height it extends that row instead.
 
 ## ROWS-06 Switching to Rows puts bands into rows and strays into the inbox
 - **Type:** Feature
@@ -123,10 +123,11 @@ directly; the later cases cover it wired into the canvas, fake windows standing 
 - **Setup:** "Arrange in rows" on.
 - **Steps:**
   1. Drag a window so its middle is in another row, over a window's right end.
-  2. Drag one right past the rows' right end.
+  2. Drag one right past the rows' right end, letting go between the rows' heights.
+  3. Same, letting go at a row's height.
 - **Expected:** Step 1 lands it in that row after the window it overlapped, the windows to its
-  right shoved on; step 2 puts it back in the inbox. While you drag, only x snaps — y follows the
-  pointer — and no built-screen drop zones appear.
+  right shoved on; step 2 puts it back in the inbox; step 3 extends that row where dropped.
+  While you drag, only x snaps — y follows the pointer — and no built-screen drop zones appear.
 - **Automate:** unit: `rowsDrop` between rows and into the inbox region.
 
 ## ROWS-11 A display change re-lays the rows
