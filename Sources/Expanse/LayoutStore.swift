@@ -56,7 +56,7 @@ enum LayoutStore {
     private static var folder: URL {
         if let folderOverride { return folderOverride }
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = support.appendingPathComponent("Expanse", isDirectory: true)
+        let dir = support.appendingPathComponent(Variant.folderName, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
@@ -178,7 +178,7 @@ enum LayoutStore {
     private static let keychainTitleSecret: SymmetricKey? = {
         guard Updater.shared.isRelease else { return nil }
         let item: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                   kSecAttrService as String: "com.invignation.expanse",
+                                   kSecAttrService as String: Variant.bundleID,
                                    kSecAttrAccount as String: "window-title-key"]
         var found: CFTypeRef?
         var query = item
