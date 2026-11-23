@@ -247,7 +247,8 @@ import Security
                 try await t.setupWalkthrough(to: "ALL SET")
                 let tree = try await t.setupWelcomeTree()
                 let sheet = ["Try it now.", "Zoom out to every window, and back", "Dive into a window", "Hop to the nearest window that way",
-                             "Centre the window you're in", "Zoom and pan the canvas", "Hold Space and drag to move around",
+                             "Centre the window you're in", "Zoom and pan the canvas", "Pan from anywhere, over windows too",
+                             "Hold Space and drag to move around",
                              "Move windows; they snap into place", "Select several, then drag or close them together",
                              "Tidy up: line up each group, where it is", "Find this again under the menu bar icon › Welcome & Shortcuts.",
                              "⌥", "`", "Click", "⌃", "← → ↑ ↓", "C", "Pinch", "Scroll", "Space", "Drag", "⇧", "T"]

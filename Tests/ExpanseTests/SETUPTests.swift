@@ -322,7 +322,7 @@ import SwiftUI
     @Test("SETUP-15 The last page is a cheat sheet (logic)") func setup15() {
         let page = ReadyPage(corner: .all)
         #expect(page.rows.map(\.0) == [["⌥", "`"], ["Click"], ["⌃", "← → ↑ ↓"], ["⌃", "⌥", "C"], ["Pinch", "Scroll"],
-                                       ["Space", "Drag"], ["Drag"], ["⇧", "Click"], ["T"]])
+                                       ["⌃", "⌥", "Scroll"], ["Space", "Drag"], ["Drag"], ["⇧", "Click"], ["T"]])
         #expect(page.rows[3].1 == "Centre the window you're in")
         let text = UITests.strings(in: page.body)
         for s in ["All set", "Try it now.", "Find this again under the menu bar icon › Welcome & Shortcuts."] {

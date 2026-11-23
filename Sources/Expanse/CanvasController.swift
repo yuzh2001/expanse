@@ -81,6 +81,7 @@ final class CanvasController: NSObject {
     private var magnifyMonitor: Any?
     private var scrollMonitor: Any?
     private var ownGestureMonitor: Any?
+    private let scrollTap = ScrollTap()
     private var observers: [pid_t: AppObserver] = [:]
     private var syncSoonWork: DispatchWorkItem?
     private var saved: SavedLayout?
@@ -741,6 +742,19 @@ final class CanvasController: NSObject {
                 self.handleDesktopGesture(event)
             }
             return event
+        }
+        // ⌃⌥ + scroll, swallowed for the whole gesture so the app under the pointer gets none of
+        // it (NAV-66): a monitor only watches, and the first ticks would still scroll that app.
+        // Without Accessibility the tap can't be made; the ⌃⌥ branch in handleDesktopGesture is
+        // the fallback then — it opens the canvas but can't keep a gesture's start from the app.
+        scrollTap.enabled = !isPaused
+        scrollTap.handler = { [weak self] event in
+            guard let self else { return }
+            if !self.isActive, !self.isPaused, !self.gliding { self.enter(zoomOut: false) }
+            self.view.scrollWheel(with: event)
+        }
+        if !scrollTap.start() {
+            logger.notice("no event tap for ⌃⌥ + scroll (Accessibility not granted?): the app under the pointer gets a gesture's first ticks")
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didTerminateApplicationNotification,
                                                           object: nil, queue: .main) { [weak self] note in
@@ -1798,15 +1812,26 @@ final class CanvasController: NSObject {
         }
     }
 
+    /// ⌃⌥ + scroll pans the canvas from anywhere, over windows too (NAV-66); not with ⌘ as well.
+    static func scrollTakesOverAnywhere(_ flags: NSEvent.ModifierFlags) -> Bool {
+        flags.contains([.control, .option]) && !flags.contains(.command)
+    }
+
     /// At 100% the desktop shows through the backdrop and gets its events (see OverlayWindow), but
     /// scrolling or pinching on it still opens the canvas at 100%, as on the backdrop: the rest of
-    /// the gesture then comes to the canvas, on top. Only where no window is under the pointer.
+    /// the gesture then comes to the canvas, on top. Only where no window is under the pointer,
+    /// unless it's a scroll with ⌃⌥ held (see scrollTakesOverAnywhere).
     private func handleDesktopGesture(_ event: NSEvent) {
         guard !isActive, !isPaused, !gliding else { return }
         // ⌥ + pinch zooms out from anywhere (see handleGlobalPinch).
         if event.type == .magnify, event.modifierFlags.contains(.option) { return }
         // The start of a gesture (a mouse wheel's ticks have no phases: each counts).
         guard event.phase == .began || event.phase == .mayBegin || (event.phase == [] && event.momentumPhase == []) else { return }
+        // Over a window or not: the canvas, on top, gets the rest of the gesture, ⌃⌥ held or not.
+        // With the event tap up (see scrollTap) it got there first and this never runs; it's the
+        // fallback for when the tap couldn't be made (no Accessibility yet), and then the app
+        // under the pointer still gets a gesture's first ticks.
+        if event.type == .scrollWheel, Self.scrollTakesOverAnywhere(event.modifierFlags) { enter(zoomOut: false); return }
         // Where AppKit has it (bottom-left origin) to the window server's (top-left).
         let p = NSEvent.mouseLocation
         let point = CGPoint(x: p.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - p.y)
@@ -1848,6 +1873,7 @@ final class CanvasController: NSObject {
         }
         save(cleanExit: true)
         isPaused = true
+        scrollTap.enabled = false
         restoreOriginals()
         overlay.orderOut(nil)
         for w in windows { remove(w) }
@@ -1875,6 +1901,7 @@ final class CanvasController: NSObject {
     func resume() {
         guard isPaused else { return }
         isPaused = false
+        scrollTap.enabled = true
         pausedForPowerOff = false
         saved = LayoutStore.load()
         savedPool = saved?.windows ?? []
