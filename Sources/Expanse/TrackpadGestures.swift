@@ -28,6 +28,7 @@ final class TrackpadGestures {
     private typealias Register = @convention(c) (UnsafeMutableRawPointer, Callback) -> Void
     private typealias Run = @convention(c) (UnsafeMutableRawPointer, Int32) -> Void
     private typealias Halt = @convention(c) (UnsafeMutableRawPointer) -> Void
+    private typealias SurfaceSize = @convention(c) (UnsafeMutableRawPointer, UnsafeMutablePointer<Int32>, UnsafeMutablePointer<Int32>) -> Int32
 
     private static let framework = dlopen("/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport", RTLD_LAZY)
     private static func sym<T>(_ name: String, _: T.Type) -> T? {
@@ -39,21 +40,30 @@ final class TrackpadGestures {
     private static let unregister = sym("MTUnregisterContactFrameCallback", Register.self)
     private static let run = sym("MTDeviceStart", Run.self)
     private static let halt = sym("MTDeviceStop", Halt.self)
+    private static let surfaceSize = sym("MTDeviceGetSensorSurfaceDimensions", SurfaceSize.self)
 
     /// The one listening instance, for the C callback (which can't carry context).
     private static let currentLock = NSLock()
     private static var current: TrackpadGestures?
 
-    /// One touch record (MTTouch): 96 bytes; state at 20, normalized position (x, y; 0…1, y up) at
-    /// 32 and 36.
+    /// One touch record (MTTouch): 96 bytes, the layout OpenMultitouchSupport and Trident
+    /// verified on-device — pathIndex at 16, state at 20 (3–5 all mean on the surface),
+    /// normalized position (x, y; 0…1, y up) at 32 and 36, contact size `zTotal` at 48,
+    /// angle at 56, ellipse axes at 60 and 64, zDensity at 92.
     private static let stride = 96
     private static let callback: Callback = { device, touches, count, timestamp, _ in
         currentLock.withLock { current }?.frame(device, touches, Int(count), timestamp)
         return 0
     }
 
+    /// `defaults write com.invignation.expanse.dev touchDump -bool YES`: log each touch's size and
+    /// axes, for picking a palm filter from real hardware (remove once tuned).
+    private let touchDump = UserDefaults.standard.bool(forKey: "touchDump")
+    private var lastDump = Date.distantPast
+
     private let lock = NSLock()
     private var recognizers: [UInt: SwipeRecognizer] = [:]
+    private var palmFilters: [UInt: PalmFilter] = [:]
     /// When the last swipe fired (same lock): the gap between a recognizer going idle and the
     /// swipe's async delivery can't let a scroll through either.
     private var lastFire = Date.distantPast
@@ -82,6 +92,10 @@ final class TrackpadGestures {
         Self.currentLock.withLock { Self.current = self }
         for i in 0..<CFArrayGetCount(list) {
             guard let device = UnsafeMutableRawPointer(mutating: CFArrayGetValueAtIndex(list, i)) else { continue }
+            var w: Int32 = 0, h: Int32 = 0
+            if let surfaceSize = Self.surfaceSize, surfaceSize(device, &w, &h) == 0, w > 0, h > 0 {
+                lock.withLock { palmFilters[UInt(bitPattern: device)] = PalmFilter(surfaceMM: (Float(w) / 100, Float(h) / 100)) }
+            }
             register(device, Self.callback)
             run(device, 0)
         }
@@ -97,30 +111,47 @@ final class TrackpadGestures {
             Self.halt?(device)
         }
         devices = nil
-        lock.withLock { recognizers = [:] }
+        lock.withLock { recognizers = [:]; palmFilters = [:] }
         Self.currentLock.withLock { if Self.current === self { Self.current = nil } }
     }
 
-    /// A frame of touches from one device: how many fingers are down, and their center.
+    /// A frame of touches from one device: how many fingers are down, and their center —
+    /// palms already filtered out, so a palm heel plus two fingers is still two.
     private func frame(_ device: UnsafeMutableRawPointer?, _ touches: UnsafeMutableRawPointer?, _ n: Int, _ t: Double) {
-        var count = 0, x = 0.0, y = 0.0
+        var contacts: [(path: Int32, x: Float, y: Float, size: Float)] = []
         if let touches {
+            var dump = touchDump && Date().timeIntervalSince(lastDump) > 0.5 ? "" : nil
             for i in 0..<n {
                 let f = touches + i * Self.stride
                 let state = f.load(fromByteOffset: 20, as: Int32.self)
-                guard state == 3 || state == 4 else { continue }  // making contact, or touching
+                guard (3...5).contains(state) else { continue }  // on-surface: make / touching / break
                 let px = Double(f.load(fromByteOffset: 32, as: Float.self)),
                     py = Double(f.load(fromByteOffset: 36, as: Float.self))
                 guard (-0.1...1.1).contains(px), (-0.1...1.1).contains(py) else { continue }  // not a touch we understand
-                count += 1
-                x += px
-                y += py
+                let path = f.load(fromByteOffset: 16, as: Int32.self),
+                    zTotal = f.load(fromByteOffset: 48, as: Float.self)
+                if dump != nil {
+                    dump! += " \(i):path=\(path) st=\(state) s=\(zTotal) x=\(px) y=\(py)"
+                }
+                contacts.append((path, Float(px), Float(py), zTotal))
+            }
+            if let dump, !dump.isEmpty {
+                lastDump = Date()
+                logger.info("touch\(dump, privacy: .public)")
             }
         }
+        let key = UInt(bitPattern: device)
+        let pts = lock.withLock { () -> [(x: Float, y: Float)] in
+            var f = palmFilters[key] ?? PalmFilter()
+            let r = f.fingers(contacts)
+            palmFilters[key] = f
+            return r
+        }
+        var count = pts.count, x = 0.0, y = 0.0
+        for p in pts { x += Double(p.x); y += Double(p.y) }
         if count > 0 { x /= Double(count); y /= Double(count) }
         // Off: forget any gesture under way, so re-enabling with fingers down can't fire it.
-        guard enabled else { lock.withLock { recognizers = [:] }; return }
-        let key = UInt(bitPattern: device)
+        guard enabled else { lock.withLock { recognizers = [:]; palmFilters = [:] }; return }
         let events = lock.withLock { () -> [SwipeRecognizer.Event] in
             var r = recognizers[key] ?? SwipeRecognizer()
             let e = r.frame(count: count, x: x, y: y)
@@ -241,5 +272,41 @@ struct SwipeRecognizer {
     private mutating func endPan() -> [Event] {
         panning = false
         return [.panEnd]
+    }
+}
+
+/// Palm rejection on raw contacts, the strategy Trident validated on-device: a contact whose
+/// size passes the cap is a palm wherever it sits, and one *born* inside a band in from the
+/// left, right, or near edge stays a palm for its whole life — palm heels and resting thumbs
+/// land there, while a finger that drifts to the rim mid-gesture was born elsewhere and still
+/// counts. Contacts are keyed on their persistent pathIndex, so a rejected palm can't move
+/// into validity; paths that leave the surface are forgotten, so the sensor can reuse indices.
+/// (macOS's own palm suppression happens in the recognizer layer above this raw stream, which
+/// is why it has to be done here at all.)
+struct PalmFilter {
+    /// Contact-size cap: bigger than this and it's a palm (Trident's tested band is 1.2–2.0;
+    /// 1.6 sits in the middle). In zTotal units, not millimetres.
+    static let maxSize: Float = 1.6
+    /// The rim band in mm where a born contact is presumed a palm (Trident's default).
+    static let bandMM: Float = 7
+    /// The trackpad's surface in mm (160×115 covers built-in pads the framework reports
+    /// nothing for).
+    var surfaceMM = (width: Float(160), height: Float(115))
+    /// Whether each live path was born inside the rim band.
+    private var bornInBand: [Int32: Bool] = [:]
+
+    /// Of `contacts` (on-surface; x, y in 0…1, y up; size = zTotal), the ones that look like
+    /// fingers — positions only, for center-of-fingers math.
+    mutating func fingers(_ contacts: [(path: Int32, x: Float, y: Float, size: Float)]) -> [(x: Float, y: Float)] {
+        let alive = Set(contacts.map(\.path))
+        bornInBand = bornInBand.filter { alive.contains($0.key) }
+        let bandX = Self.bandMM / surfaceMM.width, bandY = Self.bandMM / surfaceMM.height
+        return contacts.compactMap { c in
+            guard c.size <= Self.maxSize else { return nil }
+            if bornInBand[c.path] == nil {
+                bornInBand[c.path] = c.x < bandX || c.x > 1 - bandX || c.y < bandY
+            }
+            return bornInBand[c.path] == true ? nil : (c.x, c.y)
+        }
     }
 }

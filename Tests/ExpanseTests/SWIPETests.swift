@@ -158,4 +158,61 @@ import AppKit
         touch(4, y: 0.5, at: 0.10)
         #expect(!g.suppressesScrolls)
     }
+
+    @Test("SWIPE-05 A palm heel or oversized contact isn't a finger")
+    func palmFilter() {
+        // A heel born on the near rim stays a palm its whole life, even sliding inland.
+        var f = PalmFilter()
+        #expect(f.fingers([(path: 1, x: 0.5, y: 0.02, size: 0.8)]).isEmpty)
+        #expect(f.fingers([(path: 1, x: 0.5, y: 0.5, size: 0.8)]).isEmpty)
+        // The same on the left and right rims — but not the far edge, where fingers start.
+        var g = PalmFilter()
+        #expect(g.fingers([(path: 1, x: 0.02, y: 0.5, size: 0.8)]).isEmpty)
+        #expect(g.fingers([(path: 2, x: 0.98, y: 0.5, size: 0.8)]).isEmpty)
+        #expect(g.fingers([(path: 3, x: 0.5, y: 0.98, size: 0.8)]).count == 1)
+        // A finger born mid-pad that drifts to the rim stays a finger.
+        var h = PalmFilter()
+        #expect(h.fingers([(path: 1, x: 0.5, y: 0.5, size: 0.8)]).count == 1)
+        #expect(h.fingers([(path: 1, x: 0.5, y: 0.02, size: 0.8)]).count == 1)
+        // An oversized contact is a palm wherever it's born; a hard press just under the
+        // cap still counts.
+        var i = PalmFilter()
+        #expect(i.fingers([(path: 1, x: 0.5, y: 0.5, size: 2.0)]).isEmpty)
+        #expect(i.fingers([(path: 2, x: 0.5, y: 0.5, size: 1.5)]).count == 1)
+        // A lifted path's index can be reused by a real finger.
+        var j = PalmFilter()
+        #expect(j.fingers([(path: 5, x: 0.5, y: 0.02, size: 0.8)]).isEmpty)
+        #expect(j.fingers([]).isEmpty)
+        #expect(j.fingers([(path: 5, x: 0.5, y: 0.5, size: 0.8)]).count == 1)
+    }
+
+    @Test("SWIPE-05 A palm plus two fingers isn't a three-finger gesture")
+    func palmPlusTwo() {
+        let g = TrackpadGestures()
+        let device = UnsafeMutableRawPointer.allocate(byteCount: 8, alignment: 8)
+        defer { device.deallocate() }
+        let touches = UnsafeMutableRawPointer.allocate(byteCount: 4 * TrackpadGestures.stride, alignment: 8)
+        defer { touches.deallocate() }
+        func frame(_ cs: [(path: Int32, x: Float, y: Float, size: Float)], at t: Double) {
+            for (i, c) in cs.enumerated() {
+                let f = touches + i * TrackpadGestures.stride
+                f.storeBytes(of: c.path, toByteOffset: 16, as: Int32.self)
+                f.storeBytes(of: Int32(4), toByteOffset: 20, as: Int32.self)
+                f.storeBytes(of: c.x, toByteOffset: 32, as: Float.self)
+                f.storeBytes(of: c.y, toByteOffset: 36, as: Float.self)
+                f.storeBytes(of: c.size, toByteOffset: 48, as: Float.self)
+            }
+            g.frame(device, touches, cs.count, t)
+        }
+        let key = UInt(bitPattern: device)
+        // A heel resting on the near rim plus two scrolling fingers: the recognizer sees two.
+        frame([(1, 0.5, 0.02, 1.9), (2, 0.4, 0.5, 0.8), (3, 0.6, 0.5, 0.8)], at: 0)
+        frame([(1, 0.5, 0.02, 1.9), (2, 0.4, 0.6, 0.8), (3, 0.6, 0.6, 0.8)], at: 0.01)
+        frame([(1, 0.5, 0.02, 1.9), (2, 0.4, 0.7, 0.8), (3, 0.6, 0.7, 0.8)], at: 0.02)
+        #expect(g.recognizers[key]?.down == 2)
+        // All lifted, then three mid-pad fingertips: still a three-finger gesture.
+        frame([], at: 0.03)
+        frame([(2, 0.4, 0.5, 0.8), (3, 0.6, 0.5, 0.8), (4, 0.5, 0.6, 0.8)], at: 0.04)
+        #expect(g.recognizers[key]?.down == 3)
+    }
 }

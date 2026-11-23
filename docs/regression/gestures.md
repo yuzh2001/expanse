@@ -48,3 +48,19 @@ for the same finger counts fire too — turn them off in Trackpad settings. The 
 - **Automate:** unit: `suppressesScrolls` stays on while the swipe's touch lasts, however few
   fingers remain, `firedWithin` holds through the gap to the swipe's delivery, and both are
   off again for a fresh two-finger scroll.
+
+## SWIPE-05 A palm plus two fingers isn't a three-finger gesture
+- **Type:** Bug
+- **Area:** Gestures
+- **Steps:** Rest the heel of your hand on the trackpad's near edge (as when typing) and
+  scroll with two fingers.
+- **Expected:** An ordinary two-finger scroll: the raw MultitouchSupport stream counts the
+  palm heel as a third contact — macOS's own palm suppression sits in a layer above it —
+  so contacts are filtered before the finger count is taken. A contact bigger than the
+  size cap is a palm wherever it sits; one *born* inside a band in from the left, right,
+  or near edge stays a palm for its whole life, while a finger born mid-pad that drifts
+  to the rim still counts (the strategy Trident validated on-device; sizes in zTotal
+  units, the band in mm off `MTDeviceGetSensorSurfaceDimensions`).
+- **Automate:** unit: `PalmFilter` rejects oversized and rim-born contacts, keeps an
+  inland-born finger that drifts to the rim, and forgets a lifted path so its index can
+  be reused; `frame` counts a palm plus two fingers as two.
