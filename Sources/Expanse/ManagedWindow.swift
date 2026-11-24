@@ -97,6 +97,8 @@ final class ManagedWindow {
     /// The last one-off picture asked for (CACurrentMediaTime), and failures in a row since.
     var lastSnapshotAt: CFTimeInterval = 0
     var snapshotFailures = 0
+    /// The last picture any capture delivered — a stream's or a snapshot's (CACurrentMediaTime).
+    var lastPictureAt: CFTimeInterval = 0
     /// At 100%: its stand-in at the edge of the screen wants one fresh picture (see
     /// CanvasController.updateStreaming).
     var pictureStale = false

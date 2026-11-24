@@ -2826,6 +2826,7 @@ final class CanvasController: NSObject {
             // Runs inside the frame pump's transaction (actions disabled).
             w.node.content.contents = surface
             w.pictureWidth = IOSurfaceGetWidth(surface)
+            w.lastPictureAt = CACurrentMediaTime()
             if w.node.content.backgroundColor != nil { w.node.content.backgroundColor = nil }
             if w.needsFirstFrame {
                 w.needsFirstFrame = false
@@ -4290,6 +4291,7 @@ final class CanvasController: NSObject {
         }
         candidates.sort { $0.shown != $1.shown ? $0.shown > $1.shown : $0.distance < $1.distance }
         let ranked: [ManagedWindow] = candidates.map { $0.w }
+        inViewQueue = ranked.map(\.id)
         // At 100% nothing streams: what shows of parked windows is a sliver at the edge of the
         // screen, and a snapshot every second or so looks the same as a stream for a fraction of
         // the memory (a stream keeps a pool of full-size buffers).
@@ -4352,6 +4354,8 @@ final class CanvasController: NSObject {
 
     /// Windows in view that don't get a stream, most important first (set by updateStreaming).
     private var snapshotQueue: [CGWindowID] = []
+    /// All windows in view, streamed or not, most important first (set by updateStreaming).
+    private var inViewQueue: [CGWindowID] = []
     private var snapshotsInFlight = 0
     private var snapshotTimer: Timer?
 
@@ -4364,24 +4368,26 @@ final class CanvasController: NSObject {
     }
 
     /// One-off pictures, three at a time: first pictures of new windows as fast as they come;
-    /// on the canvas, fresh pictures of windows in view without a stream, about ten a second in
-    /// all and each at most every 1.5s; at 100%, one of each stand-in as it comes into view
-    /// (never on a timer: see updateStreaming), and full-size pictures of parked windows whose
-    /// last one is a thumbnail from the canvas, nearest first, four a second (a glide shows them
-    /// before their streams catch up). A window whose snapshot fails is tried again later and later.
+    /// on the canvas, a picture for every window in view no older than about a second — a stream
+    /// delivering frames counts as fresh, a stale one gets a snapshot, about ten a second in all;
+    /// at 100%, one of each stand-in as it comes into view (never on a timer: see
+    /// updateStreaming), and full-size pictures of parked windows whose last one is a thumbnail
+    /// from the canvas, nearest first, four a second (a glide shows them before their streams
+    /// catch up). A window whose snapshot fails is tried again later and later.
     private func pumpSnapshots() {
         // replayd isn't answering: asking for more only piles them up in it.
         guard WindowCapture.canAsk else { return }
         let now = CACurrentMediaTime()
+        func pictureAge(_ w: ManagedWindow) -> CFTimeInterval { now - max(w.lastSnapshotAt, w.lastPictureAt) }
         func due(_ w: ManagedWindow, every interval: CFTimeInterval) -> Bool {
-            now - w.lastSnapshotAt > interval * pow(2, Double(min(w.snapshotFailures, 5)))
+            pictureAge(w) > interval * pow(2, Double(min(w.snapshotFailures, 5)))
         }
         let firsts = windows.filter { $0.needsFirstFrame && !$0.capture.isRunning && due($0, every: 2) }
         let byID = Dictionary(windows.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let queue = snapshotQueue.compactMap { byID[$0] }
-        let pending = isActive ? queue : queue.filter(\.pictureStale)
-        var refresh = pending.filter { due($0, every: isActive ? 1.5 : 3) }
-            .sorted { $0.lastSnapshotAt < $1.lastSnapshotAt }
+        let pending = isActive ? inViewQueue.compactMap { byID[$0] } : queue.filter(\.pictureStale)
+        var refresh = pending.filter { due($0, every: isActive ? 1.0 : 3) }
+            .sorted { pictureAge($0) > pictureAge($1) }
         let blurry = isActive ? [] : windows.filter(pictureNeedsResizing)
         if refresh.isEmpty, now - lastSharpening > 0.25 {
             let centre = camera.center(in: viewSize)

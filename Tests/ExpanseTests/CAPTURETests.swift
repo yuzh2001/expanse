@@ -230,27 +230,27 @@ import ObjectiveC
         }
     }
 
-    @Test("CAPTURE-09 Windows without a stream get a snapshot each about every 1.5s, one per pass")
+    @Test("CAPTURE-09 Windows in view get a snapshot each about every 1s, one per pass")
     func capture09c() async throws {
         try await withCapture(stuck: false) { lab in
             let ws = (0..<4).map { window(CGWindowID(1 + $0), CGRect(x: CGFloat($0) * 700, y: 100, width: 600, height: 400)) }
             let c = lab.canvas(ws, zoomedOut: true, camera: Camera(origin: .zero, scale: 0.5))
-            c.snapshotQueue = ws.map(\.id)
+            c.inViewQueue = ws.map(\.id)
             for _ in 0..<4 {
                 c.pumpSnapshots()
                 try await Task.sleep(for: .milliseconds(30))
             }
             #expect(lab.shots.asked.count == 4)
             #expect(Set(lab.shots.asked) == Set(ws.map(\.id)))
-            // Each at most every 1.5s.
+            // Each at most every 1s.
             c.pumpSnapshots()
             try await settle()
             #expect(lab.shots.asked.count == 4)
-            for w in ws { w.lastSnapshotAt = CACurrentMediaTime() - 1.3 }
+            for w in ws { w.lastSnapshotAt = CACurrentMediaTime() - 0.8 }
             c.pumpSnapshots()
             try await settle()
             #expect(lab.shots.asked.count == 4)
-            for w in ws { w.lastSnapshotAt = CACurrentMediaTime() - 1.6 }
+            for w in ws { w.lastSnapshotAt = CACurrentMediaTime() - 1.1 }
             c.pumpSnapshots()
             try await settle()
             #expect(lab.shots.asked.count == 5)
