@@ -1,9 +1,10 @@
 #!/bin/bash
 # Builds Expanse.app into ./build.
 #
-# Signing: uses your "Apple Development" certificate if you have one, so macOS keeps the
-# Accessibility / Screen Recording grants across rebuilds. Without one it signs ad hoc, which
-# works too, but macOS will ask you to grant the permissions again after each rebuild.
+# Signing: uses your "Apple Development" certificate if you have one, else the self-signed
+# "Expanse Local Dev" one, so macOS keeps the Accessibility / Screen Recording grants across
+# rebuilds. Without one it signs ad hoc, which works too, but macOS will ask you to grant the
+# permissions again after each rebuild.
 # Override with CODESIGN_IDENTITY="Your Identity" (or "-" for ad hoc).
 # DEV=1 builds "Expanse Dev" (bundle id .dev), installable beside the release.
 set -euo pipefail
@@ -15,6 +16,8 @@ if [[ "${DEV:-}" = 1 ]]; then APP="build/Expanse Dev.app"; else APP="build/Expan
 if [[ -z "${CODESIGN_IDENTITY:-}" ]]; then
   if security find-identity -v -p codesigning 2>/dev/null | grep -q "Apple Development"; then
     CODESIGN_IDENTITY="Apple Development"
+  elif security find-identity -v -p codesigning 2>/dev/null | grep -q "Expanse Local Dev"; then
+    CODESIGN_IDENTITY="Expanse Local Dev"
   else
     CODESIGN_IDENTITY="-"
   fi

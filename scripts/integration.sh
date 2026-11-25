@@ -17,6 +17,8 @@ cd "$(dirname "$0")/.."
 if [[ -z "${CODESIGN_IDENTITY:-}" ]]; then
   if security find-identity -v -p codesigning 2>/dev/null | grep -q "Apple Development"; then
     CODESIGN_IDENTITY="Apple Development"
+  elif security find-identity -v -p codesigning 2>/dev/null | grep -q "Expanse Local Dev"; then
+    CODESIGN_IDENTITY="Expanse Local Dev"
   else
     CODESIGN_IDENTITY="-"
   fi
