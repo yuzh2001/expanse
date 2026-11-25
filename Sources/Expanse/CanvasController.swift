@@ -1249,7 +1249,7 @@ final class CanvasController: NSObject {
     /// stopped, plus a frame to draw them. Otherwise, other windows visibly blink on top: switching
     /// apps can bring the new app's windows forward after the overlay drops, windows not yet moved
     /// show the old layout, and streamed ones show macOS's capture badge. Never later than a
-    /// quarter of a second, so a slow app can't hold things up.
+    /// quarter of a second (a moment more with a resize landing), so a slow app can't hold things up.
     private func focus(_ w: ManagedWindow?, after moves: [Move], thenHandBack handBack: @escaping () -> Void) {
         let asked = CACurrentMediaTime()
         let since = { Int((CACurrentMediaTime() - asked) * 1000) }
@@ -1269,8 +1269,13 @@ final class CanvasController: NSObject {
         let ready = {
             if focused != nil, landed != nil, stopped != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.02, execute: once) }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: once)
-        whenOnScreen(moves, until: asked + 0.25) {
+        // Windows resized just now (a dive's fitToScreen): the overlay is the mask over the
+        // resize, and it stays until the window server shows the size too, not just the position.
+        // Apps animate resizes in steps, so the cap stretches while one is landing.
+        let sizing = windows.filter { !$0.parked && $0.lastSized != nil && asked - $0.lastSizedAt < 1.5 }
+        let cap: CFTimeInterval = sizing.isEmpty ? 0.25 : 0.6
+        DispatchQueue.main.asyncAfter(deadline: .now() + cap, execute: once)
+        whenOnScreen(moves, sizing: sizing, until: asked + cap) {
             landed = since()
             ready()
         }
@@ -1286,46 +1291,57 @@ final class CanvasController: NSObject {
         }
     }
 
-    /// Calls `done` once the window server shows every window in `moves` where it was put (or
-    /// at `deadline`). An app answers the Accessibility move as soon as it has taken it, but a busy
-    /// one (Chromium apps especially) hands it to the window server a frame or more later.
-    private func whenOnScreen(_ moves: [Move], until deadline: CFTimeInterval, done: @escaping () -> Void) {
+    /// Calls `done` once the window server shows every window in `moves` where it was put and
+    /// every window in `sizing` at the size it was given (or at `deadline`). An app answers the
+    /// Accessibility move as soon as it has taken it, but a busy one (Chromium apps especially)
+    /// hands it to the window server a frame or more later.
+    private func whenOnScreen(_ moves: [Move], sizing: [ManagedWindow] = [], until deadline: CFTimeInterval, done: @escaping () -> Void) {
         let start = CACurrentMediaTime()
-        var pending = moves
+        var pendingMoves = moves, pendingSizing = sizing
         func check() {
-            pending = notOnScreenYet(pending)
-            if !pending.isEmpty, CACurrentMediaTime() < deadline {
+            (pendingMoves, pendingSizing) = notOnScreenYet(pendingMoves, sizing: pendingSizing)
+            if !(pendingMoves.isEmpty && pendingSizing.isEmpty), CACurrentMediaTime() < deadline {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.008, execute: check)
                 return
             }
             let waited = Int((CACurrentMediaTime() - start) * 1000)
             if waited > 0 {
-                let apps = Set((pending.isEmpty ? moves : pending).map(\.window.appName)).sorted().joined(separator: ", ")
-                logger.info("\(pending.isEmpty ? "windows landed" : "gave up on windows landing", privacy: .public) after \(waited)ms (\(apps, privacy: .public))")
+                let apps = Set((pendingMoves.isEmpty ? moves : pendingMoves).map(\.window.appName) + pendingSizing.map(\.appName)).sorted().joined(separator: ", ")
+                logger.info("\(pendingMoves.isEmpty && pendingSizing.isEmpty ? "windows landed" : "gave up on windows landing", privacy: .public) after \(waited)ms (\(apps, privacy: .public))")
             }
             done()
         }
         check()
     }
 
-    /// The moves in `moves` the window server doesn't show yet. A closed window counts as done.
-    private func notOnScreenYet(_ moves: [Move]) -> [Move] {
-        guard !moves.isEmpty else { return [] }
-        var ids = moves.map { UnsafeRawPointer(bitPattern: UInt($0.window.id)) }
+    /// The moves in `moves` the window server doesn't show yet, and the windows in `sizing` it
+    /// doesn't show at the size they were given yet. A closed window counts as done.
+    private func notOnScreenYet(_ moves: [Move], sizing: [ManagedWindow] = []) -> (moves: [Move], sizing: [ManagedWindow]) {
+        guard !moves.isEmpty || !sizing.isEmpty else { return ([], []) }
+        var ids = Set(moves.map(\.window.id) + sizing.map(\.id)).map { UnsafeRawPointer(bitPattern: UInt($0)) }
         guard let array = CFArrayCreate(nil, &ids, ids.count, nil),
-              let info = CGWindowListCreateDescriptionFromArray(array) as? [[String: Any]] else { return [] }
+              let info = CGWindowListCreateDescriptionFromArray(array) as? [[String: Any]] else { return ([], []) }
         var at: [CGWindowID: CGPoint] = [:]
+        var sizes: [CGWindowID: CGSize] = [:]
         for entry in info {
             guard let id = entry[kCGWindowNumber as String] as? CGWindowID,
                   let bounds = entry[kCGWindowBounds as String] as? [String: Double],
                   let x = bounds["X"], let y = bounds["Y"] else { continue }
             at[id] = CGPoint(x: x, y: y)
+            if let width = bounds["Width"], let height = bounds["Height"] {
+                sizes[id] = CGSize(width: width, height: height)
+            }
         }
-        return moves.filter { move in
+        let pendingMoves = moves.filter { move in
             guard let p = at[move.window.id] else { return false }
             if let to = move.to { return p.distance(to: to) > 2 }
             return !stillParked(move.window, at: p)
         }
+        let pendingSizing = sizing.filter { w in
+            guard let size = sizes[w.id], let want = w.lastSized else { return false }
+            return abs(size.width - want.width) > 2 || abs(size.height - want.height) > 2
+        }
+        return (pendingMoves, pendingSizing)
     }
 
     // MARK: Live tracking

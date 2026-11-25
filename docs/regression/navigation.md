@@ -465,9 +465,13 @@
 - **Setup:** Zoomed out, with several Chromium windows.
 - **Steps:**
   1. Click a window far from the current view.
-- **Expected:** The canvas zooms in. When it drops away, every window is already in place and the clicked window has focus, with no blink. This takes at most a quarter of a second after the zoom.
+- **Expected:** The canvas zooms in. When it drops away, every window is already in place and the clicked window has focus, with no blink. This takes at most a quarter of a second after the zoom. If the dive resized the window, the canvas stays up — itself the mask over the resize — until the window server shows the new size too, at most a moment longer, so the window never visibly morphs after the hand-back.
 - **Check in log:** as NAV-40.
 - **Automate:** manual.
+- **Note:** 25 Nov: the hand-back used to wait for positions only; a window resized by the dive
+  (fitToScreen) kept visibly stepping to its new size after the overlay dropped (Chromium animates
+  AX resizes in steps). `whenOnScreen` now also takes the just-resized windows and waits for their
+  sizes, with the cap stretched to 0.6s while one is landing.
 
 ## NAV-42 Clicking the minimap zooms out; clicking the bare desktop doesn't
 - **Type:** Feature
