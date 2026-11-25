@@ -170,6 +170,9 @@ final class WindowNode {
     static let closeSize: CGFloat = 26
     static let closeInset: CGFloat = 10
     static let cornerRadius: CGFloat = 16
+    /// The blank shown before the first frame arrives — and over a window still stepping to a new
+    /// size (a resize reflows its content, so its last picture never matches what's revealed).
+    static let placeholderColor = NSColor(white: 0.97, alpha: 1).cgColor
     /// Narrower than this on screen, a window shows no close button (it would cover too much).
     static let closeMinWidth: CGFloat = 220
 
@@ -190,7 +193,7 @@ final class WindowNode {
         // the placeholder background shown before the first frame arrives.
         content.contentsGravity = .resize
         content.cornerRadius = WindowNode.cornerRadius
-        content.backgroundColor = NSColor(white: 0.97, alpha: 1).cgColor
+        content.backgroundColor = WindowNode.placeholderColor
         content.minificationFilter = .linear
         content.magnificationFilter = .linear
         container.addSublayer(content)

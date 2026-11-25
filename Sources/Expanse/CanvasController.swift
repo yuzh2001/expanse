@@ -1274,6 +1274,15 @@ final class CanvasController: NSObject {
         // Apps animate resizes in steps, so the cap stretches while one is landing.
         let sizing = windows.filter { !$0.parked && $0.lastSized != nil && asked - $0.lastSizedAt < 1.5 }
         let cap: CFTimeInterval = sizing.isEmpty ? 0.25 : 0.6
+        // One still stepping to its new size shows a blank instead of its last picture meanwhile:
+        // the resize reflows its content, so the old picture never matches what's revealed, and
+        // handing back over it flashes.
+        let morphing = sizing.isEmpty ? [] : notOnScreenYet([], sizing: sizing).sizing
+        for w in morphing {
+            w.node.content.contents = nil
+            w.node.content.backgroundColor = WindowNode.placeholderColor
+        }
+        if !morphing.isEmpty { view.render() }
         DispatchQueue.main.asyncAfter(deadline: .now() + cap, execute: once)
         whenOnScreen(moves, sizing: sizing, until: asked + cap) {
             landed = since()
