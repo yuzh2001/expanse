@@ -35,8 +35,12 @@
   1. Zoom far out (press - a few times).
   2. Click that window.
 - **Expected:** The text is sharp during the end of the zoom-in and on arrival. There's no blurry frame before the real window shows.
-- **Automate:** unit: CanvasController.pixelSize(for:) with an animation heading to scale 1 gives full size.
-- **Note:** 61e6e55 replaced this commit's mechanism: capture size follows where the camera is heading (viewScale), so windows being zoomed into start sharp.
+- **Automate:** unit: CanvasController.pixelSize(for:) with an animation heading to scale 1 gives full size; CAPTURE-42: a dive asks for a full-size snapshot however fresh the thumbnail.
+- **Note:** 61e6e55 replaced this commit's mechanism: capture size follows where the camera is heading (viewScale), so windows being zoomed into start sharp. Sizing alone wasn't enough —
+  streams only reconfigure after the camera settles (too late for a 0.18s dive) and the snapshot
+  pump's age gate skipped a window whose thumbnail was still fresh, so the blurry picture lasted
+  the whole dive. Now the dive asks for a full-size snapshot as it starts (sharpenForArrival),
+  which usually lands while the overlay is still animating or the windows are moving underneath.
 
 ## CAPTURE-04 At 100%, windows on screen carry no purple capture badge
 - **Type:** Bug fix

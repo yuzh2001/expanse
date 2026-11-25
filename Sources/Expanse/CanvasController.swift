@@ -1189,6 +1189,7 @@ final class CanvasController: NSObject {
         let t1 = CACurrentMediaTime()
         bringToFront(w)
         fitToScreen(w)
+        sharpenForArrival(w)
         let t2 = CACurrentMediaTime()
         view.render()
         let prep = CACurrentMediaTime() - t0
@@ -4437,6 +4438,18 @@ final class CanvasController: NSObject {
         return have < want * 0.9 || have > want * 2.5
     }
 
+    /// A dive or glide to `w` ends at scale 1 with the real window taking over: sharpen its
+    /// picture right away, bypassing the pump's age gate, so the hand-back doesn't pop from the
+    /// canvas's thumbnail to the sharp real window. The picture usually lands while the dive is
+    /// still animating or the windows are moving underneath the overlay, where the swap goes
+    /// unseen; a late one just freshens the stand-in for next time.
+    private func sharpenForArrival(_ w: ManagedWindow) {
+        guard WindowCapture.canAsk else { return }
+        let backing = screen.backingScaleFactor
+        let size = CGSize(width: w.canvasFrame.width * backing, height: w.canvasFrame.height * backing)
+        w.capture.snapshot(window: w.scWindow, pixelSize: size) { _ in }
+    }
+
     private static let streamStartsPerPass = 10
     private var moreStartsQueued = false
     private var lastCaptureCount = -1
@@ -4811,6 +4824,7 @@ final class CanvasController: NSObject {
         if let focus {
             bringToFront(focus)
             fitToScreen(focus)
+            sharpenForArrival(focus)
             let r = camera.toView(focus.canvasFrame)
             // You put the view here and the window you picked is on screen: the view stays —
             // unless, with auto-centre on, it's partly off the work area (under the Dock or past

@@ -60,6 +60,23 @@ import ObjectiveC
         }
     }
 
+    @Test("CAPTURE-42 A dive grabs a full-size picture right away, however fresh the thumbnail")
+    func capture42() async throws {
+        try await withCapture(stuck: false) { lab in
+            let w = window(1, CGRect(x: 0, y: 0, width: 800, height: 500))
+            let c = lab.canvas([w], zoomedOut: true, camera: Camera(origin: .zero, scale: 0.25))
+            // Fresh by the pump's age gate: the dive asks anyway.
+            w.lastSnapshotAt = CACurrentMediaTime()
+            w.lastPictureAt = CACurrentMediaTime()
+            c.sharpenForArrival(w)
+            try await settle()
+            let b = c.screen.backingScaleFactor
+            #expect(lab.shots.asked == [1])
+            #expect(lab.shots.sizes == [CGSize(width: 800 * b, height: 500 * b)])
+            lab.stopTimer(c)
+        }
+    }
+
     @Test("CAPTURE-06 Zoomed out, only windows in view are captured")
     func capture06() async throws {
         try await withCapture { lab in
