@@ -29,7 +29,7 @@ struct SavedLayout: Codable {
         /// say), they identify the window exactly, even among windows with the same title.
         var id: UInt32?
         var pid: Int32?
-        /// Which row it was in, in Rows mode (nil = the inbox). Nil in layouts saved before rows.
+        /// Which row it was in, in Rows mode. Nil in layouts saved before rows — placed nearest.
         var row: Int?
         /// Out of view when saved (its app hidden or quit, the window minimised, closed or on
         /// another Space): its spot is kept for when it's back, but it wasn't on the canvas. Nil

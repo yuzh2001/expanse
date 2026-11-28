@@ -2841,7 +2841,8 @@ final class CanvasController: NSObject {
         // in front. That holds while displays change too (an app opened just after unlocking was
         // left in the middle of the view, over your windows): before the layout is back in
         // place, it gets its spot on the canvas, and the real window goes there with the rest.
-        let anchor = windows.last { !$0.parked && $0.pid == w.pid } ?? windows.last { !$0.parked }
+        let anchor = windows.last { !$0.parked && !$0.floating && $0.pid == w.pid }
+            ?? windows.last { !$0.parked && !$0.floating }
         let arriving = !firstSync
 
         windows.append(w)
@@ -3112,7 +3113,7 @@ final class CanvasController: NSObject {
     // MARK: Rows
 
     /// "Arrange in rows" (the menu bar panel's switches): rows of same-height windows, x free
-    /// within a row, plus an unsorted inbox of the rest to their right (see RowLayout). Turning it
+    /// within a row, every window in one (see RowLayout). Turning it
     /// on lays everything out by the bands the windows already form; turning it off leaves them
     /// where they are.
     var rowsMode: Bool {
@@ -3134,8 +3135,7 @@ final class CanvasController: NSObject {
     static let rowsModeKey = "arrangeInRows"
 
     /// What the Rows engine works in on this screen: rows the work area's height less the margins
-    /// all round, the standard gap between neighbours, the inbox a big step right of the rows'
-    /// right end, its shelves wrapping at two work areas wide. Rows sit more than a viewport
+    /// all round, the standard gap between neighbours. Rows sit more than a viewport
     /// apart: with one centred in the work area (see focusCamera), the rows beside it lie past
     /// the screen's edges, the Dock strip included — never peeking out under it — and a clear
     /// band shows between them zoomed out.
@@ -3145,7 +3145,17 @@ final class CanvasController: NSObject {
         return RowLayout.Metrics(windowHeight: workArea.height - 2 * Self.screenMargin,
                                  gap: Self.gap,
                                  rowGap: max(96, outside + Self.screenMargin + 48),
-                                 top: 0, inboxGap: 200, inboxMaxWidth: 2 * workArea.width)
+                                 top: 0)
+    }
+
+    /// Put `w` at `row`'s right end (past its rightmost member, so the settle sorts it last).
+    /// nil leaves the row choice to layout: the row nearest where the window is.
+    private func appendToRowEnd(_ w: ManagedWindow, row: Int?) {
+        if let row {
+            let right = windows.filter { $0 !== w && !$0.floating && $0.row == row }.map(\.canvasFrame.maxX).max()
+            if let right { w.canvasFrame.origin.x = right + Self.gap }
+        }
+        w.row = row
     }
 
     /// Every window as the engine sees it (see RowLayout.Item) — floating ones aren't laid out.
@@ -3154,16 +3164,20 @@ final class CanvasController: NSObject {
             .map { RowLayout.Item(id: $0.id, frame: $0.canvasFrame, row: $0.row, fixedHeight: $0.sizesItself) }
     }
 
-    /// Every floating window joins the layout (the inbox in Rows mode; it just stays where it is
-    /// in the free one): you focused a managed window, so the transient ones' time is up — or the
-    /// canvas came up, where nothing floats.
+    /// Every floating window joins the layout (the row of the window it floated over in Rows
+    /// mode; it just stays where it is in the free one): you focused a managed window, so the
+    /// transient ones' time is up — or the canvas came up, where nothing floats.
     private func sweepFloating() {
         let floaters = windows.filter { $0.floating }
         guard !floaters.isEmpty else { return }
-        for w in floaters { w.floating = false; w.returnTo = nil; w.row = nil }
+        for w in floaters {
+            let row = w.returnTo?.row
+            w.floating = false; w.returnTo = nil
+            if rowsMode { appendToRowEnd(w, row: row) }
+        }
         if rowsMode {
             applyRows()
-            logger.info("swept \(floaters.count) floating window(s) into the inbox")
+            logger.info("swept \(floaters.count) floating window(s) into the rows")
         } else {
             commitInBackground()
             logger.info("swept \(floaters.count) floating window(s) onto the canvas")
@@ -3173,8 +3187,8 @@ final class CanvasController: NSObject {
 
     /// Rows mode: lay `windows` out — `items` already laid out (a drop, the switch's distribute,
     /// Tidy's collapseAll), or RowLayout.layout of where they are — and write spots and rows back.
-    /// A row's window gets the row's height, its width capped at the work area's; an inbox window,
-    /// or one its app sizes, keeps its own size. Home is where a window is (no derive in Rows
+    /// A row's window gets the row's height, its width capped at the work area's; one its app
+    /// sizes keeps its own size. Home is where a window is (no derive in Rows
     /// mode). `animated`: zoomed out, also glide the view out to show the whole result.
     func applyRows(_ items: [RowLayout.Item]? = nil, animated: Bool = false) {
         guard rowsMode else { return }
@@ -3204,9 +3218,8 @@ final class CanvasController: NSObject {
         scheduleSave()
     }
 
-    /// A canvas drag let go in Rows mode: lands the window in the row its middle is in — new rows
-    /// open past the ends — or back in the inbox right of the rows, and everything settles (see
-    /// RowLayout.drop).
+    /// A canvas drag let go in Rows mode: lands the window in the row nearest its middle — new
+    /// rows open past the ends — and everything settles (see RowLayout.drop).
     func rowsDrop(_ w: ManagedWindow, at frame: CGRect) {
         guard rowsMode else { return }
         applyRows(RowLayout.drop(w.id, at: frame, into: rowItems(), rowMetrics))
@@ -4033,7 +4046,8 @@ final class CanvasController: NSObject {
         } else if rowsMode, windowKinds[w.id]?.standard ?? (AX.subrole(w.ax) == kAXStandardWindowSubrole as String) {
             // Rows mode: a rule-matched utility floats over the window you're in, left where its
             // app put it — until you focus a managed window or open the canvas, which sweeps it
-            // into the inbox (see sweepFloating). Anything else goes to the inbox at once.
+            // into the rows (see sweepFloating). Anything else joins the anchor's row at its
+            // right end at once.
             if WindowRules.floats(bundleID: w.bundleID, title: w.title,
                                   hasSibling: windows.contains { $0 !== w && $0.pid == w.pid }) {
                 w.floating = true
@@ -4044,9 +4058,9 @@ final class CanvasController: NSObject {
                 scheduleSave()
                 return
             }
-            w.row = nil
+            appendToRowEnd(w, row: anchor?.row)
             applyRows()
-            logger.info("placed new window \(w.appName, privacy: .public) in the inbox")
+            logger.info("placed new window \(w.appName, privacy: .public) at the end of row \(w.row.map(String.init) ?? "?", privacy: .public)")
         } else if windowKinds[w.id]?.standard ?? (AX.subrole(w.ax) == kAXStandardWindowSubrole as String),
                   let spot = freeSpot(for: w, near: anchor, onScreenOnly: !autoCentre) {
             w.canvasFrame.origin = spot
@@ -4086,10 +4100,11 @@ final class CanvasController: NSObject {
     private func placeUnrecognised(_ strangers: [ManagedWindow]) {
         guard !strangers.isEmpty else { return }
         if rowsMode {
-            // Rows mode: windows the saved layout doesn't know go to the inbox like new ones.
+            // Rows mode: windows the saved layout doesn't know join the row nearest where they
+            // are (layout places row-less ones).
             for w in strangers { w.row = nil }
             applyRows()
-            logger.info("placed \(strangers.count) unrecognised windows in the inbox")
+            logger.info("placed \(strangers.count) unrecognised windows in the rows")
             return
         }
         let visible = camera.toCanvas(CGRect(origin: .zero, size: viewSize))
@@ -4202,7 +4217,7 @@ final class CanvasController: NSObject {
             logger.info("floating \(w.appName, privacy: .public)[\(w.id)] closed; back to \(back.appName, privacy: .public)[\(back.id)]")
             focusWindow(back)
         }
-        // Rows mode: the inbox packs tighter; rows keep their x (see RowLayout.layout).
+        // Rows mode: the row it was in settles; rows keep their x (see RowLayout.layout).
         if rowsMode { applyRows() }
         if isActive { view.render() }
     }
@@ -4620,7 +4635,7 @@ final class CanvasController: NSObject {
         // Before Expanse comes to the front, and without asking the app: zooming out mustn't wait.
         let leaving = zoomOut ? knownCurrentWindow() : nil
         isActive = true
-        // Nothing floats over the canvas: the transient windows join the inbox.
+        // Nothing floats over the canvas: the transient windows join the rows.
         sweepFloating()
         camera.scale = 1
         updateOverlayFrame()

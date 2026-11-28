@@ -1,11 +1,12 @@
 import CoreGraphics
 
-/// The Rows layout: windows in rows that share a top and a height, x free within a row, plus an
-/// "inbox" region to the rows' right for windows that aren't in one. Pure functions over
+/// The Rows layout: windows in rows that share a top and a height, x free within a row — and
+/// every window is in one: a drop anywhere joins the nearest row. Pure functions over
 /// canvas coordinates (y down): no controller, no view, so every rule is unit-tested directly.
 enum RowLayout {
 
-    /// A window to lay out: `row` is which row it's in (nil = the inbox); `fixedHeight` keeps the
+    /// A window to lay out: `row` is which row it's in (nil = not yet placed — layout puts it in
+    /// the row nearest its middle); `fixedHeight` keeps the
     /// window's own height, top-aligned in its row (a VM window sizing itself), where the rest
     /// take the row's window height.
     struct Item: Equatable {
@@ -19,17 +20,13 @@ enum RowLayout {
     struct Metrics: Equatable {
         /// Every row's window height (the work area's height less the margins all round).
         var windowHeight: CGFloat
-        /// The space between windows in a row, and between inbox items and shelves.
+        /// The space between windows in a row.
         var gap: CGFloat
         /// The space between rows: wide enough that a row centred on screen leaves the rows
         /// beside it entirely off it, Dock strip included (see CanvasController.rowMetrics).
         var rowGap: CGFloat
-        /// The canvas y of the first row's top (and the inbox's).
+        /// The canvas y of the first row's top.
         var top: CGFloat = 0
-        /// The space between the rows' right end and the inbox region.
-        var inboxGap: CGFloat
-        /// A shelf wraps to the next once it would get wider than this.
-        var inboxMaxWidth: CGFloat
     }
 
     /// The vertical step from one row's top to the next's.
@@ -43,16 +40,26 @@ enum RowLayout {
         Int(((y - m.top) / pitch(m)).rounded(.down))
     }
 
-    /// Canonical positions. Rows: renumbered 0..<n keeping their order (empty rows vanish), each
-    /// item at its row's top and height (fixedHeight ones keep theirs), sorted by minX — input
-    /// order on ties — with at least `gap` between neighbours; x is otherwise kept. Inbox: packed
-    /// on shelves starting at `inboxMinX`, ordered by (minY, minX), wrapping past `inboxMaxWidth`
-    /// (a wider window gets its own shelf); shelf height = its tallest. Sizes unchanged there.
+    /// The row nearest canvas y `y` of `count` rows, measured to the rows' middles: anywhere in
+    /// a row's band or the gap around it lands in it — only past halfway across the gap does it
+    /// mean the next one.
+    static func nearestRow(atY y: CGFloat, count: Int, _ m: Metrics) -> Int {
+        min(max(Int(((y - m.top - m.windowHeight / 2) / pitch(m)).rounded()), 0), max(count - 1, 0))
+    }
+
+    /// Canonical positions. An unplaced item (row nil) joins the row nearest its middle — row 0
+    /// when no rows exist yet. Rows: renumbered 0..<n keeping their order (empty rows vanish),
+    /// each item at its row's top and height (fixedHeight ones keep theirs), sorted by minX —
+    /// input order on ties — with at least `gap` between neighbours; x is otherwise kept.
     static func layout(_ items: [Item], _ m: Metrics) -> [Item] {
         var out = items
+        let placed = Set(out.compactMap(\.row)).sorted()
+        for i in out.indices where out[i].row == nil {
+            out[i].row = placed.isEmpty ? 0 : placed[nearestRow(atY: out[i].frame.midY, count: placed.count, m)]
+        }
         let used = Set(out.compactMap(\.row)).sorted()
         let renumber = Dictionary(uniqueKeysWithValues: used.enumerated().map { ($0.element, $0.offset) })
-        let byRow = Dictionary(grouping: out.indices.filter { out[$0].row != nil }, by: { out[$0].row! })
+        let byRow = Dictionary(grouping: out.indices, by: { out[$0].row! })
         for (old, idxs) in byRow {
             guard let row = renumber[old] else { continue }
             var right = -CGFloat.infinity
@@ -66,51 +73,19 @@ enum RowLayout {
                 right = f.maxX
             }
         }
-        // The inbox region to the right of every row.
-        let inboxX = inboxMinX(out, excluding: nil, m)
-        let inbox = sortedInbox(out.indices.filter { out[$0].row == nil }, out)
-        var shelfTop = m.top, x = inboxX, shelfHeight: CGFloat = 0
-        for i in inbox {
-            var f = out[i].frame
-            // A shelf that would run past inboxMaxWidth wraps; an item alone on one never does,
-            // however wide it is.
-            if x > inboxX, x + f.width - inboxX > m.inboxMaxWidth {
-                shelfTop += shelfHeight + m.gap
-                x = inboxX
-                shelfHeight = 0
-            }
-            f.origin = CGPoint(x: x, y: shelfTop)
-            out[i].frame = f
-            x += f.width + m.gap
-            shelfHeight = max(shelfHeight, f.height)
-        }
         return out
     }
 
-    /// The inbox region's left edge, computed without the item `excluding` (the dragged one: it
-    /// hasn't landed yet). With no rows the inbox starts at the canvas's left plus `inboxGap`.
-    static func inboxMinX(_ items: [Item], excluding: CGWindowID? = nil, _ m: Metrics) -> CGFloat {
-        let right = items.lazy.filter { $0.id != excluding && $0.row != nil }.map(\.frame.maxX).max() ?? 0
-        return right + m.inboxGap
-    }
-
-    /// The dragged item `id` was let go at `proposed` (the caller snapped it already). A middle at
-    /// a row's height lands it in that row — right of the row's end it extends the row — a new
-    /// row opening above the first or below the last when its middle is past them. Right of the
-    /// rows' end at a height no row covers it's back in the inbox. Then everything settles (see
-    /// layout). Left neighbours keep their x; the drop lands after the rightmost one it would
-    /// overlap, and right neighbours are shoved on by the sweep.
+    /// The dragged item `id` was let go at `proposed` (the caller snapped it already). It joins
+    /// the row nearest its middle — right of the row's end it extends the row — a new row opening
+    /// above the first or below the last only when its middle is past them by half a pitch. Then
+    /// everything settles (see layout). Left neighbours keep their x; the drop lands after the
+    /// rightmost one it would overlap, and right neighbours are shoved on by the sweep.
     static func drop(_ id: CGWindowID, at proposed: CGRect, into items: [Item], _ m: Metrics) -> [Item] {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return layout(items, m) }
         var out = items
-        var k = row(atY: proposed.midY, m)
+        var k = Int(((proposed.midY - m.top - m.windowHeight / 2) / pitch(m)).rounded())
         let rowCount = Set(out.compactMap(\.row)).count
-        let atRowHeight = k >= 0 && k < rowCount && proposed.midY < rowTop(k, m) + m.windowHeight
-        if proposed.midX >= inboxMinX(out, excluding: id, m), !atRowHeight {
-            out[i].row = nil
-            out[i].frame.origin = proposed.origin
-            return layout(out, m)
-        }
         if k < 0 {
             // Dropped above the first row: a new one opens at the top.
             for j in out.indices where out[j].row != nil { out[j].row! += 1 }
@@ -131,8 +106,8 @@ enum RowLayout {
 
     /// Free → Rows: windows that already form bands become rows. Sorted by top, each window joins
     /// the band when its vertical overlap with it is at least half the smaller height, else opens
-    /// the next one. A band of two or more is a row, ordered by its top; a lone window goes to
-    /// the inbox. x kept.
+    /// the next one. Every band is a row, ordered by its top — a lone window is a row of one.
+    /// x kept.
     static func distribute(_ frames: [(id: CGWindowID, frame: CGRect, fixedHeight: Bool)],
                            _ m: Metrics) -> [Item] {
         var bands: [(minY: CGFloat, maxY: CGFloat, members: [(id: CGWindowID, frame: CGRect, fixedHeight: Bool)])] = []
@@ -148,10 +123,8 @@ enum RowLayout {
             }
             bands.append((w.frame.minY, w.frame.maxY, [w]))
         }
-        var next = 0, items: [Item] = []
-        for band in bands {
-            let row = band.members.count >= 2 ? next : nil
-            if row != nil { next += 1 }
+        var items: [Item] = []
+        for (row, band) in bands.enumerated() {
             items += band.members.map { Item(id: $0.id, frame: $0.frame, row: row, fixedHeight: $0.fixedHeight) }
         }
         return layout(items, m)
@@ -188,15 +161,5 @@ enum RowLayout {
     /// Indices into `items` ordered by frame.minX, input order on ties.
     private static func sortedByMinX(_ idxs: [Int], _ items: [Item]) -> [Int] {
         idxs.sorted { items[$0].frame.minX == items[$1].frame.minX ? $0 < $1 : items[$0].frame.minX < items[$1].frame.minX }
-    }
-
-    /// Indices into `items` ordered by (minY, minX), input order on ties.
-    private static func sortedInbox(_ idxs: [Int], _ items: [Item]) -> [Int] {
-        idxs.sorted {
-            let a = items[$0].frame, b = items[$1].frame
-            if a.minY != b.minY { return a.minY < b.minY }
-            if a.minX != b.minX { return a.minX < b.minX }
-            return $0 < $1
-        }
     }
 }

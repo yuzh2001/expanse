@@ -80,14 +80,14 @@ final class ManagedWindow {
     var home: CGPoint?
     /// How far the last fit pushed the window to clear an overlap (see fitLayoutToScreen).
     var fitPush: CGVector = .zero
-    /// Which row it's in, in Rows mode (see CanvasController.applyRows): nil = the inbox right
-    /// of the rows. Meaningless in the free layout.
+    /// Which row it's in, in Rows mode (see CanvasController.applyRows): nil = not placed yet —
+    /// the next layout puts it in the row nearest its middle. Meaningless in the free layout.
     var row: Int?
     /// Floating over the layout: a rule-matched utility window left where its app put it, in
-    /// front of what you were doing — not in a row, not in the inbox, and not moved or parked
+    /// front of what you were doing — not in a row, and not moved or parked
     /// by any commit. Transient: focusing a managed window, or going to the canvas, sweeps it
-    /// into the inbox (see CanvasController.sweepFloating). Not saved: a floater's record just
-    /// has no row, so it comes back as an inbox window after a restart.
+    /// into the row it floated over (see CanvasController.sweepFloating). Not saved: a floater's
+    /// record just has no row, so it comes back placed nearest its middle after a restart.
     var floating = false
     /// The window you were in when this one floated in: closing it takes you back (see
     /// CanvasController.remove).

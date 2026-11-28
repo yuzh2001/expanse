@@ -7,7 +7,7 @@ import ScreenCaptureKit
 @_private(sourceFile: "RowLayout.swift") @testable import Expanse
 
 /// docs/regression/floating.md. Floating windows: rule-matched utilities that open over what
-/// you're doing, held out of the layout until a managed window takes focus — then the inbox.
+/// you're doing, held out of the layout until a managed window takes focus — then the rows.
 @MainActor @Suite("FLOAT: Floating windows", .serialized) struct FLOATTests {
 
     // MARK: Helpers
@@ -98,7 +98,7 @@ import ScreenCaptureKit
             let c = Self.rowsCanvas()
             defer { Self.finish(c) }
             // Calc's new window opens over your work (below the rows, say): it floats — kept out
-            // of the inbox and out of every plan to move real windows.
+            // of the rows and out of every plan to move real windows.
             let n = Fake.scWindow(id: 3, pid: Fake.firstPID, bundleID: "com.example.calc", appName: "Calc",
                                   frame: CGRect(x: 300, y: 700, width: 320, height: 480))
             Self.scan(c, [c.windows[0].scWindow, c.windows[1].scWindow, n], standard: [3])
@@ -107,18 +107,19 @@ import ScreenCaptureKit
             #expect(w.canvasFrame.origin == CGPoint(x: 300, y: 700 - TestDisplay.laptop.menuBar))
             #expect(w.returnTo != nil)
             #expect(!c.commitPlan().contains { $0.0 === w })
-            // The inbox takes the next un-matched window, as before.
+            // The next un-matched window joins the row you're working in at its right end
+            // (row 0 ends at 1300, a gap later 1320), at the row's top and height (laptop: 917).
             let m = Fake.scWindow(id: 4, pid: Fake.firstPID, bundleID: "com.example.app", appName: "Example",
                                   frame: CGRect(x: 300, y: 200, width: 500, height: 300))
             Self.scan(c, [c.windows[0].scWindow, c.windows[1].scWindow, n, m], standard: [4])
             let u = Self.window(c, 4)!
-            #expect(!u.floating && u.row == nil && u.canvasFrame.minX > 1400)
+            #expect(!u.floating && u.row == 0 && u.canvasFrame == Self.r(1320, 0, 500, 917))
         }
     }
 
     // MARK: FLOAT-03
 
-    @Test("FLOAT-03 Focusing a managed window sweeps every floater into the inbox")
+    @Test("FLOAT-03 Focusing a managed window sweeps every floater into the rows")
     func float03() {
         Self.withRules {
             let c = Self.rowsCanvas()
@@ -134,9 +135,10 @@ import ScreenCaptureKit
             #expect(Self.window(c, 3)!.floating)
             c.focusSettled(on: 1)
             #expect(!Self.window(c, 3)!.floating && !Self.window(c, 4)!.floating)
-            // Both packed on inbox shelves right of the rows' end (1300 + 200), the higher one first.
-            #expect(Self.window(c, 4)!.canvasFrame.minX == 1500)
-            #expect(Self.window(c, 3)!.canvasFrame.minX == 1840)
+            // Both join the row of the window they floated over (row 0, ending at 1300), one
+            // after the other at its right end, at the row's top and height.
+            #expect(Self.window(c, 3)!.row == 0 && Self.window(c, 3)!.canvasFrame == Self.r(1320, 0, 320, 917))
+            #expect(Self.window(c, 4)!.row == 0 && Self.window(c, 4)!.canvasFrame == Self.r(1660, 0, 320, 917))
         }
     }
 

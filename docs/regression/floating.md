@@ -5,7 +5,7 @@
 Floating windows ("float rules", Rows mode): a window matching a rule — a Settings pane, the
 WeChat image viewer — opens over the window you're in, left where its app put it instead of
 joining the layout. It's transient: focusing a managed window sweeps every floater into the
-inbox, and so does going to the canvas. Closing one returns focus to the window you were in.
+rows, and so does going to the canvas. Closing one returns focus to the window you were in.
 `WindowRules` is a pure match over (bundleID, title, has-sibling) exercised directly.
 
 ## FLOAT-01 A rule matches by app, then title, and non-main only with a sibling
@@ -27,17 +27,18 @@ inbox, and so does going to the canvas. Closing one returns focus to the window 
 - **Steps:** Let the window scan take it in.
 - **Expected:** It floats: `floating` set, no row, its canvas spot the spot its app chose, the
   window you were in remembered as `returnTo`. No commit moves or parks it, no layout pass
-  places it. An un-ruled window opening at the same time joins the inbox as before.
+  places it. An un-ruled window opening at the same time joins the row you're working in at its
+  right end.
 - **Automate:** unit: `arrive` on a fake scan, checking flags, spot, `returnTo` and the commit plan.
 
-## FLOAT-03 Focusing a managed window sweeps every floater into the inbox
+## FLOAT-03 Focusing a managed window sweeps every floater into the rows
 - **Type:** Feature
 - **Area:** FLOAT
 - **Commits:** unreleased
 - **Setup:** Two windows floating.
 - **Steps:** Focus one of them, then a managed window.
 - **Expected:** Focusing a floater changes nothing — the rest stay up. Focusing a managed window
-  drops every floater into the inbox in one go (packed on shelves right of the rows, at their
+  drops every floater into the rows in one go (at the right end of the row each floated over,
   own sizes).
 - **Automate:** unit: `focusSettled(on:)` on a floater then a managed window.
 

@@ -652,7 +652,7 @@ private struct SettingsPage: View {
 // MARK: - Floating windows
 
 /// The float rules: which apps' new windows float over your work instead of joining the layout
-/// (in Rows mode), until you focus a managed window — then they drop into the inbox. Each rule
+/// (in Rows mode), until you focus a managed window — then they drop into the rows. Each rule
 /// is an app's bundle ID, optionally narrowed to windows that aren't its main one, or whose
 /// title matches a regular expression. The table persists in defaults (see WindowRules.rules);
 /// Reset puts the built-in set back.
@@ -670,7 +670,7 @@ private struct FloatsPage: View {
                 LinkButton(title: "Reset") { model.perform(.floatRules(WindowRules.builtIn)) }
                     .help("Back to the built-in table")
             }
-            Text("A new window from these apps floats over what you're doing instead of joining the layout, until you focus a managed window — then it drops into the inbox. Rows mode only.")
+            Text("A new window from these apps floats over what you're doing instead of joining the layout, until you focus a managed window — then it drops into the rows. Rows mode only.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

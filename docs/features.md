@@ -33,17 +33,19 @@ What we might build next. New requests go in as they come up, and finished work 
   Before, it was placed across both and showed on the other display alone. Mostly back on the
   main display it returns as a real window by itself.
 - "Arrange in rows" (the panel's switches, off by default): rows of same-height windows — the
-  work area's height less the margins — with x free inside a row (ROWS-01…14). Dropping a window
-  into a row shoves the windows to its right; above or below every row a new one opens; right of
-  the rows an unsorted inbox packs the rest, new windows included. Windows already in bands go
-  into rows when it's turned on; turning it off leaves everything where it is.
+  work area's height less the margins — with x free inside a row (ROWS-01…14). Every window is
+  in one: a drop anywhere joins the row nearest its middle, above or below every row a new one
+  opens, and dropping into a row shoves the windows to its right. A new window joins the row
+  you're working in at its right end. Windows already in bands go into rows when it's turned on
+  (a stray is a row of one); turning it off leaves everything where it is.
 - At 100% the minimap is a small panel in the Dock's strip at the bottom-right (UI-43): as tall
   as the strip allows, the Spaces panel's tiles shrunk to match, where working windows don't
   reach. Before it kept its canvas size and they covered most of it; zoomed out it's unchanged.
 - Floating windows (FLOAT-01…5): in Rows mode a window matching a float rule — utilities like
   System Settings and Finder, an app's non-main windows like WeChat's viewers — opens over the
   window you're in instead of joining the layout. Focusing a managed window, or going to the
-  canvas, sweeps every floater into the inbox; closing one returns focus to the window you were
+  canvas, sweeps every floater into the row it floated over; closing one returns focus to the
+  window you were
   in. The rules are a predefined table (see WindowRules), edited on the menu bar panel's
   Floating windows page: switches, a per-rule title pattern and non-main-only check, adding a
   running app, and Reset (UI-44).
